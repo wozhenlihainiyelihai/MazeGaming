@@ -12,6 +12,7 @@ class SoundManager:
             'click': self._create_sound(440, 0.1),
             'coin': self._create_sound([880, 1046], 0.08),
             'potion': self._create_sound([523, 587, 659], 0.12),
+            'trap': self._create_sound([220, 180], 0.2), # 【功能新增】陷阱音效
         }
 
     def _create_sound(self, freqs, duration):
