@@ -1,4 +1,5 @@
-#存储所有全局配置和常量，方便统一管理和修改。
+# config.py
+# 存储所有全局配置和常量，方便统一管理和修改。
 
 # --- Layout Settings ---
 SCREEN_WIDTH, SCREEN_HEIGHT = 1050, 800
@@ -10,23 +11,21 @@ INFO_PANEL_X = MAZE_AREA_X + MAZE_AREA_SIZE
 FPS = 60
 
 # --- Color Palette ---
-COLOR_BG = (135, 206, 235)
-COLOR_WALL = (146, 209, 79)
-COLOR_PATH = (245, 245, 245)
-COLOR_GRID = (189, 215, 166)
-COLOR_HUD_BG = (44, 62, 80)
-COLOR_TEXT = (255, 255, 255)
-COLOR_SUBTEXT = (255, 236, 139)
-COLOR_BTN = (221, 46, 68)
-COLOR_BTN_HOVER = (252, 212, 0)
-COLOR_BTN_SHADOW = (161, 26, 48)
-COLOR_DP_PATH = (255, 69, 0, 150)
+COLOR_BG = (135, 206, 235); COLOR_WALL = (146, 209, 79); COLOR_PATH = (245, 245, 245)
+COLOR_GRID = (189, 215, 166); COLOR_HUD_BG = (44, 62, 80); COLOR_TEXT = (255, 255, 255)
+COLOR_SUBTEXT = (255, 236, 139); COLOR_BTN = (221, 46, 68); COLOR_BTN_HOVER = (252, 212, 0)
+COLOR_BTN_SHADOW = (161, 26, 48); COLOR_DP_PATH = (255, 69, 0, 150)
+# 【UI优化】调整了弹窗和战斗日志背景色的不透明度
+COLOR_POPUP_BG = (44, 62, 80, 190) # 背景更透明一些
+COLOR_HEALTH_PLAYER = (0, 255, 127); COLOR_HEALTH_BOSS = (255, 69, 0); COLOR_HEALTH_BG = (70, 70, 70)
+COLOR_BATTLE_LOG_BG = (30, 40, 50, 220) # 日志背景更实一些，确保文字清晰
+
 
 # --- Game States & Algorithm Types ---
-STATE_MAIN_MENU, STATE_INSTRUCTIONS, STATE_SELECT_MODE, STATE_GAMEPLAY, STATE_QUIT = range(5)
+STATE_MAIN_MENU, STATE_INSTRUCTIONS, STATE_SELECT_MODE, STATE_GAMEPLAY, STATE_BATTLE, STATE_QUIT = range(6)
 ALGO_GREEDY, ALGO_DP_VISUALIZATION, ALGO_RANDOM = 'Greedy (Strategic)', 'DP (Optimal Path)', 'Random Walk'
 
-# --- Maze Element Constants & Color Mapping ---
+# --- Maze Element Constants ---
 WALL, PATH, START, END, BOSS, LOCKER, GOLD, TRAP, HEALTH_POTION, SHOP = range(10)
 TILE_TYPE_COLORS = {
     WALL: COLOR_WALL, PATH: COLOR_PATH, START: (19, 201, 242), END: (221, 46, 68),
@@ -35,20 +34,21 @@ TILE_TYPE_COLORS = {
 }
 
 # --- 游戏机制量化 ---
-TRAP_GOLD_COST = 15
-TRAP_HEALTH_COST = 20
-GOLD_REWARD = 10
-POTION_HEAL_AMOUNT = 20
-LOCKER_COST = 5
+TRAP_GOLD_COST, TRAP_HEALTH_COST = 15, 20
+GOLD_REWARD, POTION_HEAL_AMOUNT, LOCKER_COST = 10, 20, 5
 
-# --- 【新增】通关评分量化 (用于AI价值评估) ---
-SCORE_BOSS_KILL = 1000
-SCORE_LOCKER_UNLOCK = 100
-SCORE_PER_GOLD = 1
-SCORE_PER_DIAMOND = 50
-SCORE_PER_HEALTH = 2
+# --- 通关评分量化 ---
+SCORE_BOSS_KILL, SCORE_LOCKER_UNLOCK = 1000, 100
+SCORE_PER_GOLD, SCORE_PER_DIAMOND, SCORE_PER_HEALTH = 1, 50, 2
 TIME_PENALTY_PER_5_SECONDS = 1
 
-# --- Boss 属性 ---
-BOSS_HEALTH = 100
-BOSS_ATTACK = 10
+# --- 玩家与Boss属性 ---
+PLAYER_BASE_ATTACK = 5
+BOSS_MAX_HEALTH, BOSS_ATTACK = 100, 10
+
+# --- 技能系统定义 ---
+SKILLS = {
+    'power_strike': {'name': 'Power Strike', 'cost': 1, 'effect': {'damage_multiplier': 2.0}},
+    'frost_nova': {'name': 'Frost Nova', 'cost': 1, 'effect': {'freeze_turns': 1}}
+}
+
