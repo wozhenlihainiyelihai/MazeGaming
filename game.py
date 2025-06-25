@@ -7,7 +7,6 @@ from config import *
 from utils import SoundManager, create_all_icons
 from maze import Maze
 from entities import AIPlayer
-# 【功能新增】导入DP算法模块
 from algorithms.dynamic_programming import calculate_dp_path
 
 class Game:
@@ -107,7 +106,6 @@ class Game:
         self.screen.fill(COLOR_BG)
         if self.game_state == STATE_GAMEPLAY and self.maze:
             maze_surface = self.screen.subsurface((MAZE_AREA_X, MAZE_AREA_Y, MAZE_AREA_SIZE, MAZE_AREA_SIZE))
-            # 【功能新增】根据情况决定是否绘制DP路径
             path_to_draw = self.dp_optimal_path if self.active_algorithm == ALGO_DP_VISUALIZATION else None
             self.maze.draw(maze_surface, dp_path_to_show=path_to_draw)
             
