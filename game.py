@@ -22,12 +22,10 @@ class Game:
         self.maze, self.ai_player = None, None
         self.ai_timer, self.ai_move_interval = 0, 100
         
-        # 【功能新增】用于存储算法和路径
         self.active_algorithm = ALGO_GREEDY
         self.dp_optimal_path = []
         self.dp_max_score = 0
 
-        # 加载字体
         try:
             font_name = 'markerfelt'
             self.font_title = pygame.font.SysFont(font_name, 80); self.font_button = pygame.font.SysFont(font_name, 50)
@@ -44,22 +42,20 @@ class Game:
     def start_new_game(self, size):
         """开始一个全新的迷宫实例"""
         self.maze = Maze(size)
-        # 【功能新增】游戏开始时，预先计算DP路径
         self.dp_optimal_path, self.dp_max_score = calculate_dp_path(self.maze)
         print(f"DP Optimal Path calculated. Max score: {self.dp_max_score}")
         
-        self.reset_simulation(ALGO_GREEDY) # 默认以贪心算法开始
+        self.reset_simulation(ALGO_GREEDY)
         self.game_state = STATE_GAMEPLAY
         self.sound_manager.play('coin')
 
     def reset_simulation(self, algorithm):
-        """【功能新增】重置模拟并设置新的算法"""
+        """重置模拟并设置新的算法"""
         print(f"Resetting simulation with algorithm: {algorithm}")
         self.active_algorithm = algorithm
-        self.maze.reset() # 恢复迷宫到初始状态
+        self.maze.reset()
         self.ai_player = AIPlayer(start_pos=self.maze.start_pos)
         
-        # 如果是DP可视化，将预计算的路径交给AI
         if self.active_algorithm == ALGO_DP_VISUALIZATION:
             self.ai_player.path_to_follow = list(self.dp_optimal_path)
 
@@ -90,13 +86,13 @@ class Game:
             if 'x' in button_name: self.start_new_game(int(button_name.split('x')[0]))
             elif button_name == 'back': self.game_state = STATE_INSTRUCTIONS
         elif self.game_state == STATE_GAMEPLAY:
-            # 【功能新增】处理游戏中的算法切换按钮
             if button_name == ALGO_GREEDY: self.reset_simulation(ALGO_GREEDY)
             elif button_name == ALGO_DP_VISUALIZATION: self.reset_simulation(ALGO_DP_VISUALIZATION)
             elif button_name == 'main_menu': self.game_state = STATE_MAIN_MENU
 
     def update_state(self):
-        if self.game_state == STATE_GAMEPLAY and self.ai_player:
+        # AI行动的逻辑现在完全由AIPlayer.update()控制
+        if self.game_state == STATE_GAMEPLAY and self.ai_player and self.ai_player.is_active:
             self.ai_timer += self.clock.get_time()
             if self.ai_timer >= self.ai_move_interval:
                 self.ai_timer = 0
@@ -150,8 +146,8 @@ class Game:
             icon_surface = self.legend_icons.get(item_type)
             if icon_surface: self.screen.blit(icon_surface, (x_icon, y_pos))
             self.draw_text(text, self.font_legend, COLOR_HUD_BG, (x_text, y_pos + 5))
-        self.draw_button('continue', 'Continue', (SCREEN_WIDTH / 2 + 150, SCREEN_HEIGHT - 100), (220, 70))
-        self.draw_button('back', 'Back', (SCREEN_WIDTH / 2 - 150, SCREEN_HEIGHT - 100), (220, 70))
+        self.draw_button('continue', 'Continue', (SCREEN_WIDTH / 2, SCREEN_HEIGHT - 100), (220, 70))
+        self.draw_button('back', 'Back', (100, 50), (150, 60))
 
     def draw_select_mode(self):
         self.buttons.clear(); self.screen.fill(COLOR_BG)
@@ -165,29 +161,30 @@ class Game:
     def draw_info_panel(self):
         panel_rect = (INFO_PANEL_X, MAZE_AREA_Y, INFO_PANEL_WIDTH, MAZE_AREA_SIZE)
         pygame.draw.rect(self.screen, COLOR_HUD_BG, panel_rect, border_radius=15)
-        
         title_pos = (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, 50)
         self.draw_text("AI STATUS", self.font_button, COLOR_BTN_HOVER, title_pos, centered=True)
         if self.ai_player:
             y_offset = 120
             self.draw_text("Health:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset))
-            self.draw_text(f"{self.ai_player.health}", self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + 150, y_offset))
+            self.draw_text(f"{self.ai_player.health} / 100", self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + 150, y_offset))
             y_offset += 40
             self.draw_text("Gold:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset))
             self.draw_text(f"{self.ai_player.gold}", self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + 150, y_offset))
-            
-        y_offset = 250
+            y_offset += 40
+            self.draw_text("Diamonds:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset))
+            self.draw_text(f"{self.ai_player.diamonds}", self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + 150, y_offset))
+
+        y_offset = 300
         self.draw_text("CONTROL", self.font_button, COLOR_BTN_HOVER, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), centered=True)
         y_offset += 60
         btn_w, btn_h, btn_font = 240, 55, pygame.font.SysFont('markerfelt', 35) if 'markerfelt' in pygame.font.get_fonts() else pygame.font.SysFont(None, 35)
 
-        # 【功能新增】添加算法切换按钮
         self.draw_button(ALGO_GREEDY, "Run Greedy AI", (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), (btn_w, btn_h), font=btn_font)
         y_offset += 75
         self.draw_button(ALGO_DP_VISUALIZATION, "Show DP Path", (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), (btn_w, btn_h), font=btn_font)
         
         y_offset = 550
-        self.draw_text("RUNNING:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), centered=True)
+        self.draw_text("CURRENTLY RUNNING:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), centered=True)
         self.draw_text(self.active_algorithm, self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset + 35), centered=True)
         
-        self.draw_button('main_menu', 'Menu', (INFO_PANEL_X + INFO_PANEL_WIDTH/2, SCREEN_HEIGHT - 80), (220, 60))
+        self.draw_button('main_menu', 'Main Menu', (INFO_PANEL_X + INFO_PANEL_WIDTH/2, SCREEN_HEIGHT - 80), (220, 60))

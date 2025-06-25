@@ -1,5 +1,6 @@
 # 包含所有辅助工具，如SoundManager和图标生成函数。
 
+from collections import deque
 import pygame
 import numpy
 from config import *
@@ -89,3 +90,38 @@ def create_all_icons(icon_size):
     tile_icons[BOSS] = surf
     
     return tile_icons
+
+def bfs_path(start, end, maze_grid, view_limit_center=None, view_limit_radius=None):
+    """
+    广度优先搜索 (BFS) 路径查找器。
+    可用于全图寻路，或在有限视野内寻路。
+    """
+    queue = deque([[start]])
+    visited = {start}
+    
+    while queue:
+        path = queue.popleft()
+        x, y = path[-1]
+        
+        if (x, y) == end:
+            return path
+            
+        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
+            nx, ny = x + dx, y + dy
+            
+            # 视野限制检查
+            if view_limit_center and view_limit_radius:
+                if (abs(nx - view_limit_center[0]) > view_limit_radius or
+                    abs(ny - view_limit_center[1]) > view_limit_radius):
+                    continue
+
+            # 边界和障碍物检查
+            if (0 <= nx < len(maze_grid[0]) and 0 <= ny < len(maze_grid) and
+                    maze_grid[ny][nx].type != WALL and (nx, ny) not in visited):
+                visited.add((nx, ny))
+                new_path = list(path)
+                new_path.append((nx, ny))
+                queue.append(new_path)
+                
+    return None # No path found
+

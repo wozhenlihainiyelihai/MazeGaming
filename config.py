@@ -22,30 +22,33 @@ COLOR_BTN_HOVER = (252, 212, 0)
 COLOR_BTN_SHADOW = (161, 26, 48)
 COLOR_DP_PATH = (255, 69, 0, 150)
 
-# --- Game States ---
-STATE_MAIN_MENU = 'main_menu'
-STATE_INSTRUCTIONS = 'instructions'
-STATE_SELECT_MODE = 'select_mode'
-STATE_GAMEPLAY = 'gameplay'
-STATE_QUIT = 'quit'
+# --- Game States & Algorithm Types ---
+STATE_MAIN_MENU, STATE_INSTRUCTIONS, STATE_SELECT_MODE, STATE_GAMEPLAY, STATE_QUIT = range(5)
+ALGO_GREEDY, ALGO_DP_VISUALIZATION, ALGO_RANDOM = 'Greedy (Strategic)', 'DP (Optimal Path)', 'Random Walk'
 
-# --- Maze Element Constants ---
+# --- Maze Element Constants & Color Mapping ---
 WALL, PATH, START, END, BOSS, LOCKER, GOLD, TRAP, HEALTH_POTION, SHOP = range(10)
-
-# --- Algorithm Types ---
-ALGO_GREEDY = 'Greedy (Real-time)'
-ALGO_DP_VISUALIZATION = 'DP (Optimal Path)'
-ALGO_RANDOM = 'Random Walk (Baseline)'
-
-# --- Maze Element Color Mapping ---
 TILE_TYPE_COLORS = {
     WALL: COLOR_WALL, PATH: COLOR_PATH, START: (19, 201, 242), END: (221, 46, 68),
     BOSS: COLOR_PATH, LOCKER: COLOR_PATH, GOLD: COLOR_PATH, TRAP: COLOR_PATH,
     HEALTH_POTION: COLOR_PATH, SHOP: COLOR_PATH,
 }
 
-# --- 【功能新增】游戏机制量化 ---
+# --- 游戏机制量化 ---
 TRAP_GOLD_COST = 15
 TRAP_HEALTH_COST = 20
 GOLD_REWARD = 10
 POTION_HEAL_AMOUNT = 20
+LOCKER_COST = 5
+
+# --- 【新增】通关评分量化 (用于AI价值评估) ---
+SCORE_BOSS_KILL = 1000
+SCORE_LOCKER_UNLOCK = 100
+SCORE_PER_GOLD = 1
+SCORE_PER_DIAMOND = 50
+SCORE_PER_HEALTH = 2
+TIME_PENALTY_PER_5_SECONDS = 1
+
+# --- Boss 属性 ---
+BOSS_HEALTH = 100
+BOSS_ATTACK = 10
