@@ -22,7 +22,6 @@ COLOR_BATTLE_LOG_BG = (30, 40, 50, 220) # 日志背景更实一些，确保文�
 
 
 # --- Game States & Algorithm Types ---
-# 【功能新增】添加了选择迷宫来源的新状态
 STATE_MAIN_MENU, STATE_INSTRUCTIONS, STATE_CHOOSE_MAZE_SOURCE, STATE_SELECT_MODE, STATE_GAMEPLAY, STATE_BATTLE, STATE_QUIT = range(7)
 ALGO_GREEDY, ALGO_DP_VISUALIZATION, ALGO_RANDOM = 'Greedy (Strategic)', 'DP (Optimal Path)', 'Random Walk'
 

@@ -50,10 +50,11 @@ def get_tile_value(tile_type, player, maze=None, pos=None):
     return 0
 
 def decide_move_greedy(player, maze):
-    """混合决策：优先临时目标，否则执行包含Boss战评估的局部贪心"""
+    """【记忆增强版】混合决策：优先临时目标，否则执行局部贪心，并避免立刻回头"""
     
     # 1. 检查是否有临时目标（开锁后）
     if player.temporary_target:
+        # ... (这部分逻辑无变化) ...
         if (player.x, player.y) == player.temporary_target:
             print(f"已到达临时目标 {player.temporary_target}，清除目标。")
             player.temporary_target = None
@@ -79,19 +80,19 @@ def decide_move_greedy(player, maze):
 
             target_x, target_y = player.x + c_offset, player.y + r_offset
 
+            # 【核心修改】增加判断，如果目标是上一个位置，则跳过，避免回头
+            if (target_x, target_y) == player.previous_pos:
+                continue
+
             if (0 <= target_x < maze.size and 0 <= target_y < maze.size and
                     maze.grid[target_y][target_x].type != WALL):
                 
                 tile = maze.grid[target_y][target_x]
                 value = get_tile_value(tile.type, player, maze, (target_x, target_y))
                 
-                if value > 0: # 只考虑有正收益的目标
-                    path_to_target_in_view = bfs_path(
-                        start=(player.x, player.y),
-                        end=(target_x, target_y),
-                        maze_grid=maze.grid
-                    )
-                    
+                if value > 0:
+                    # ... (后续的性价比计算逻辑无变化) ...
+                    path_to_target_in_view = bfs_path(start=(player.x, player.y), end=(target_x, target_y), maze_grid=maze.grid)
                     if path_to_target_in_view:
                         distance = len(path_to_target_in_view) - 1
                         if distance > 0:
@@ -106,13 +107,16 @@ def decide_move_greedy(player, maze):
 
     # 4. 计算并返回移动
     if best_target:
-        final_path = bfs_path(
-            start=(player.x, player.y), 
-            end=best_target, 
-            maze_grid=maze.grid
-        )
+        final_path = bfs_path(start=(player.x, player.y), end=best_target, maze_grid=maze.grid)
         if final_path and len(final_path) > 1:
             next_step = final_path[1]
+            # 【健壮性修改】如果走向终点的下一步是回头路，而我们有其他选择，则重新考虑
+            if next_step == player.previous_pos:
+                # 寻找其他非回头路的选择
+                for move in final_path[1:]:
+                    if move != player.previous_pos:
+                        next_step = move
+                        break
             return (next_step[0] - player.x, next_step[1] - player.y)
 
     return (0, 0)

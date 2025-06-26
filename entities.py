@@ -7,11 +7,7 @@ from collections import deque
 import pygame
 from config import *
 from utils import bfs_path
-# 导入正确的、基于局部视野的贪心算法
 from algorithms.greedy import decide_move_greedy as simple_greedy_move
-
-# 【删除】移除对一个不存在的函数的导入
-# from algorithms.branch_and_bound import get_heuristic_turns
 
 
 class Tile:
@@ -54,11 +50,12 @@ class AIPlayer:
 
         # 状态
         self.is_active = True
-        self.path_to_follow = [] # 仅用于DP算法
-        self.temporary_target = None # 用于存储开锁后的临时目标
-
-        # 用于记录当前回合临时攻击力提升的属性
+        self.path_to_follow = []
+        self.temporary_target = None
         self.attack_boost_this_turn = 0
+        
+        # 短期记忆，用于存储上一个位置
+        self.previous_pos = None
 
     def decide_move(self, maze, algorithm):
         """决策逻辑现在会根据算法类型调用正确的函数"""
@@ -88,6 +85,7 @@ class AIPlayer:
         next_x, next_y = self.x + dx, self.y + dy
         if 0 <= next_x < maze.size and 0 <= next_y < maze.size:
              if maze.grid[next_y][next_x].type != WALL:
+                self.previous_pos = (self.x, self.y)
                 self.x = next_x
                 self.y = next_y
                 return True
@@ -133,9 +131,6 @@ class AIPlayer:
         room_tiles = set()
         queue = deque([(self.x, self.y)])
         visited = {(self.x, self.y)}
-        
-        # 重新计算主路，以确保得到最新的路径信息
-        # This assumes maze object has a _find_main_path method
         main_path_set = set(maze._find_main_path())
 
         while queue:

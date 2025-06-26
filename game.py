@@ -1,4 +1,3 @@
-# game.py (完整替换)
 
 import pygame
 import sys
