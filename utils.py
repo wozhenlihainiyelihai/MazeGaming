@@ -13,7 +13,7 @@ class SoundManager:
             'click': self._create_sound(440, 0.1),
             'coin': self._create_sound([880, 1046], 0.08),
             'potion': self._create_sound([523, 587, 659], 0.12),
-            'trap': self._create_sound([220, 180], 0.2), # 【功能新增】陷阱音效
+            'trap': self._create_sound([220, 180], 0.2),
         }
 
     def _create_sound(self, freqs, duration):
@@ -91,37 +91,38 @@ def create_all_icons(icon_size):
     
     return tile_icons
 
-def bfs_path(start, end, maze_grid, view_limit_center=None, view_limit_radius=None):
+def bfs_path_avoiding_history(start, end, maze_grid, history_path=set()):
     """
-    广度优先搜索 (BFS) 路径查找器。
-    可用于全图寻路，或在有限视野内寻路。
+    一个改进的BFS寻路算法，它会避免走已经走过的点。
     """
     queue = deque([[start]])
     visited = {start}
-    
+
     while queue:
         path = queue.popleft()
-        x, y = path[-1]
-        
-        if (x, y) == end:
-            return path
-            
-        for dx, dy in [(0, -1), (0, 1), (-1, 0), (1, 0)]:
-            nx, ny = x + dx, y + dy
-            
-            # 视野限制检查
-            if view_limit_center and view_limit_radius:
-                if (abs(nx - view_limit_center[0]) > view_limit_radius or
-                    abs(ny - view_limit_center[1]) > view_limit_radius):
-                    continue
+        node_x, node_y = path[-1]
 
-            # 边界和障碍物检查
-            if (0 <= nx < len(maze_grid[0]) and 0 <= ny < len(maze_grid) and
-                    maze_grid[ny][nx].type != WALL and (nx, ny) not in visited):
-                visited.add((nx, ny))
-                new_path = list(path)
-                new_path.append((nx, ny))
-                queue.append(new_path)
-                
-    return None # No path found
+        if (node_x, node_y) == end:
+            return path
+
+        # 优先顺序可以影响路径选择，例如优先向下、向右
+        for dx, dy in [(0, 1), (1, 0), (0, -1), (-1, 0)]:
+            next_x, next_y = node_x + dx, node_y + dy
+
+            if not (0 <= next_y < len(maze_grid) and 0 <= next_x < len(maze_grid[0])):
+                continue
+            
+            if maze_grid[next_y][next_x].type == WALL:
+                continue
+
+            # 如果节点在访问过或历史路径中，则跳过
+            if (next_x, next_y) in visited or ((next_x, next_y) in history_path and (next_x, next_y) != end):
+                continue
+            
+            visited.add((next_x, next_y))
+            new_path = list(path)
+            new_path.append((next_x, next_y))
+            queue.append(new_path)
+    
+    return None
 

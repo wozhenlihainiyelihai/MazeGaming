@@ -4,7 +4,6 @@ import sys
 import random
 from collections import deque
 import json
-
 from config import *
 from utils import SoundManager, create_all_icons
 from maze import Maze

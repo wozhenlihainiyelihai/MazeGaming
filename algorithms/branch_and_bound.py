@@ -1,5 +1,6 @@
 import heapq
 from config import *
+from entities import AIPlayer, Boss 
 
 class BattleNode:
     def __init__(self, turns, boss_hp, player_hp, player_gold, available_skills, path, player_base_attack):
