@@ -1,10 +1,11 @@
-# game.py
-# 包含核心的Game类，负责管理游戏的所有状态、事件处理、逻辑更新和UI绘制。
+# game.py (完整替换)
 
 import pygame
 import sys
 import random
 from collections import deque
+import json
+
 from config import *
 from utils import SoundManager, create_all_icons
 from maze import Maze
@@ -46,11 +47,28 @@ class Game:
         self.buttons = {}
         self.legend_icons = create_all_icons(50)
 
-    def start_new_game(self, size):
-        self.maze = Maze(size); self.boss = Boss()
+    def start_new_game(self, size=None, source_data=None):
+        self.maze = Maze(size=size, source_data=source_data)
+        self.boss = Boss()
         self.dp_optimal_path, self.dp_max_score = calculate_dp_path(self.maze)
         self.reset_simulation(ALGO_GREEDY)
-        self.game_state = STATE_GAMEPLAY; self.sound_manager.play('coin')
+        self.game_state = STATE_GAMEPLAY
+        self.sound_manager.play('coin')
+
+    def load_fixed_maze_and_start(self):
+        fixed_path = 'test_maze.json'
+        print(f"正在尝试从固定路径加载测试迷宫: {fixed_path}")
+        try:
+            with open(fixed_path, 'r') as f:
+                data = json.load(f)
+            if 'maze' in data and isinstance(data['maze'], list):
+                self.start_new_game(source_data=data['maze'])
+            else:
+                print(f"错误: 文件 '{fixed_path}' 的格式不正确。")
+        except FileNotFoundError:
+            print(f"错误: 找不到测试文件 '{fixed_path}'。")
+        except Exception as e:
+            print(f"加载固定迷宫文件时出错: {e}")
 
     def reset_simulation(self, algorithm):
         self.active_algorithm = algorithm; self.maze.reset(); self.boss.reset()
@@ -75,16 +93,20 @@ class Game:
             if rect.collidepoint(mouse_pos): self.on_button_click(name); break
 
     def on_button_click(self, button_name):
-        # Refactored button logic for different states
         if self.game_state == STATE_MAIN_MENU:
             if button_name == 'start': self.game_state = STATE_INSTRUCTIONS
             elif button_name == 'quit': self.game_state = STATE_QUIT
         elif self.game_state == STATE_INSTRUCTIONS:
-            if button_name == 'continue': self.game_state = STATE_SELECT_MODE
+            if button_name == 'continue': self.game_state = STATE_CHOOSE_MAZE_SOURCE
             elif button_name == 'back': self.game_state = STATE_MAIN_MENU
-        elif self.game_state == STATE_SELECT_MODE:
-            if 'x' in button_name: self.start_new_game(int(button_name.split('x')[0]))
+        elif self.game_state == STATE_CHOOSE_MAZE_SOURCE:
+            if button_name == 'generate': self.game_state = STATE_SELECT_MODE
+            elif button_name == 'load_test': 
+                self.load_fixed_maze_and_start()
             elif button_name == 'back': self.game_state = STATE_INSTRUCTIONS
+        elif self.game_state == STATE_SELECT_MODE:
+            if 'x' in button_name: self.start_new_game(size=int(button_name.split('x')[0]))
+            elif button_name == 'back': self.game_state = STATE_CHOOSE_MAZE_SOURCE 
         elif self.game_state == STATE_GAMEPLAY:
             if button_name == ALGO_GREEDY: self.reset_simulation(ALGO_GREEDY)
             elif button_name == ALGO_DP_VISUALIZATION: self.reset_simulation(ALGO_DP_VISUALIZATION)
@@ -105,31 +127,80 @@ class Game:
 
     def update_battle(self):
         if self.ai_player.health <= 0 or self.boss.health <= 0: return
+        
+        # 【核心修改】在每回合开始时，重置临时攻击力
+        self.ai_player.attack_boost_this_turn = 0
+        
         action = find_best_attack_sequence(self.ai_player, self.boss)
+        
+        is_frozen_this_turn = False
+
         if action == "attack":
-            damage = self.ai_player.attack; self.boss.health -= damage; self.battle_log.append(f"AI attacks, dealing {damage} damage!")
+            self.battle_log.append(f"AI attacks, dealing {self.ai_player.attack} damage!")
+
+        elif action == "boost_gold_attack":
+            self.ai_player.gold -= GOLD_COST_FOR_BOOST
+            # 【核心修改】设置临时攻击力状态
+            self.ai_player.attack_boost_this_turn = ATTACK_BOOST_AMOUNT
+            self.battle_log.append(f"AI pays {GOLD_COST_FOR_BOOST} gold to power up!")
+            total_damage = self.ai_player.attack + self.ai_player.attack_boost_this_turn
+            self.battle_log.append(f"Empowered attack deals {total_damage} damage!")
+
+        elif action == "boost_health_attack":
+            self.ai_player.health -= HEALTH_COST_FOR_BOOST
+            # 【核心修改】设置临时攻击力状态
+            self.ai_player.attack_boost_this_turn = ATTACK_BOOST_AMOUNT
+            self.battle_log.append(f"AI sacrifices {HEALTH_COST_FOR_BOOST} health to power up!")
+            total_damage = self.ai_player.attack + self.ai_player.attack_boost_this_turn
+            self.battle_log.append(f"Empowered attack deals {total_damage} damage!")
+            
         elif action in self.ai_player.skills:
-            skill_data = SKILLS[action]; self.battle_log.append(f"AI uses {skill_data['name']}!")
-            if 'damage_multiplier' in skill_data['effect']:
-                damage = self.ai_player.attack * skill_data['effect']['damage_multiplier']
-                self.boss.health -= damage; self.battle_log.append(f"It's super effective! Deals {int(damage)} damage!")
-            if 'freeze_turns' in skill_data['effect']:
-                self.boss.is_frozen_for = skill_data['effect']['freeze_turns']; self.battle_log.append(f"Boss is frozen for {self.boss.is_frozen_for} turn(s)!")
+            skill_data = SKILLS[action]
             self.ai_player.skills.remove(action)
+            self.battle_log.append(f"AI uses skill: {skill_data['name']}!")
+            if 'freeze_turns' in skill_data['effect']:
+                self.boss.is_frozen_for = skill_data['effect']['freeze_turns']
+                is_frozen_this_turn = True
+                self.battle_log.append(f"Boss is frozen for {self.boss.is_frozen_for} turn(s)!")
+
+        # --- 应用伤害和结算 ---
+        # 【核心修改】计算最终伤害，包含基础攻击、临时提升和技能加成
+        final_damage = self.ai_player.attack + self.ai_player.attack_boost_this_turn
+        if action in SKILLS and 'damage_multiplier' in SKILLS[action]['effect']:
+            final_damage *= SKILLS[action]['effect']['damage_multiplier']
+            self.battle_log.append(f"It's super effective! Final damage: {int(final_damage)}!")
+
+        self.boss.health -= final_damage
+        
         if self.boss.health <= 0:
-            self.battle_log.append("Boss has been defeated!"); self.ai_player.boss_defeated = True
+            self.battle_log.append("Boss has been defeated!")
+            self.ai_player.boss_defeated = True
             self.maze.grid[self.ai_player.y][self.ai_player.x].type = PATH
-            self.game_state = STATE_GAMEPLAY; self.ai_player.target_pos = None; return
+            self.game_state = STATE_GAMEPLAY
+            self.ai_player.target_pos = None
+            return
+
         pygame.time.wait(500)
+
+        # --- Boss反击 ---
         if self.boss.is_frozen_for > 0:
-            self.battle_log.append("Boss is frozen and cannot move!"); self.boss.is_frozen_for -= 1
+            if not is_frozen_this_turn:
+                self.battle_log.append("Boss is frozen and cannot move!")
+                self.boss.is_frozen_for -= 1
         else:
-            damage = self.boss.attack; self.ai_player.health -= damage
-            self.battle_log.append(f"Boss retaliates, dealing {damage} damage!")
+            damage_from_boss = self.boss.attack
+            self.ai_player.health -= damage_from_boss
+            self.battle_log.append(f"Boss retaliates, dealing {damage_from_boss} damage!")
+        
+        if is_frozen_this_turn and self.boss.is_frozen_for > 0:
+            self.boss.is_frozen_for -= 1
+            
         if self.ai_player.health <= 0:
             self.battle_log.append("AI has been defeated! Respawning...")
-            self.ai_player.x, self.ai_player.y = self.ai_player.start_pos; self.ai_player.health = self.ai_player.max_health
-            self.game_state = STATE_GAMEPLAY; self.ai_player.target_pos = None
+            self.ai_player.x, self.ai_player.y = self.ai_player.start_pos
+            self.ai_player.health = self.ai_player.max_health
+            self.game_state = STATE_GAMEPLAY
+            self.ai_player.target_pos = None
     
     def draw(self):
         self.screen.fill(COLOR_BG)
@@ -143,60 +214,57 @@ class Game:
         else: 
             if self.game_state == STATE_MAIN_MENU: self.draw_main_menu()
             elif self.game_state == STATE_INSTRUCTIONS: self.draw_instructions()
+            elif self.game_state == STATE_CHOOSE_MAZE_SOURCE: self.draw_choose_maze_source()
             elif self.game_state == STATE_SELECT_MODE: self.draw_select_mode()
         pygame.display.flip()
+    
+    def draw_choose_maze_source(self):
+        self.buttons.clear(); self.screen.fill(COLOR_BG)
+        self.draw_text("Choose Maze Source", self.font_title, COLOR_BTN_SHADOW, (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 4), centered=True)
+        y_pos_start = SCREEN_HEIGHT / 2 - 50
+        btn_size = (450, 75)
+        self.draw_button('generate', 'Generate Random Maze', (SCREEN_WIDTH / 2, y_pos_start), btn_size)
+        self.draw_button('load_test', 'Load Test Maze', (SCREEN_WIDTH / 2, y_pos_start + 100), btn_size)
+        self.draw_button('back', 'Back', (100, 50), (150, 60))
 
     def draw_battle_screen(self):
-        """【UI重制】绘制一个更清晰、更美观的战斗界面"""
+        # ...此函数无变化...
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
-        # 绘制一个居中的弹窗作为战斗背景
         popup_width, popup_height = 800, 500
         popup_x = (SCREEN_WIDTH - popup_width) / 2
         popup_y = (SCREEN_HEIGHT - popup_height) / 2
         popup_rect = pygame.Rect(popup_x, popup_y, popup_width, popup_height)
         pygame.draw.rect(overlay, COLOR_POPUP_BG, popup_rect, border_radius=20)
         pygame.draw.rect(overlay, COLOR_GRID, popup_rect, 4, border_radius=20)
-
-        # VS 文本
         self.draw_text_on_surface(overlay, "VS", self.font_vs, COLOR_BTN_SHADOW, (SCREEN_WIDTH/2, popup_y + 180), centered=True)
-
-        # --- 玩家信息 (左侧) ---
         player_x = popup_x + 200
         self.draw_text_on_surface(overlay, "AI PLAYER", self.font_button, COLOR_TEXT, (player_x, popup_y + 80), centered=True)
-        # 玩家头像框
         pygame.draw.circle(overlay, COLOR_HUD_BG, (player_x, popup_y + 180), 60)
         pygame.draw.circle(overlay, COLOR_HEALTH_PLAYER, (player_x, popup_y + 180), 60, 5)
         self.draw_health_bar(overlay, player_x - 100, popup_y + 260, 200, 25, self.ai_player.health, self.ai_player.max_health, COLOR_HEALTH_PLAYER)
         self.draw_text_on_surface(overlay, f"{int(self.ai_player.health)}/{self.ai_player.max_health}", self.font_info, COLOR_TEXT, (player_x, popup_y + 295), centered=True)
-
-        # --- Boss 信息 (右侧) ---
         boss_x = popup_x + popup_width - 200
         self.draw_text_on_surface(overlay, "THE BOSS", self.font_button, COLOR_TEXT, (boss_x, popup_y + 80), centered=True)
-        # Boss头像框
         pygame.draw.circle(overlay, COLOR_HUD_BG, (boss_x, popup_y + 180), 60)
         pygame.draw.circle(overlay, COLOR_HEALTH_BOSS, (boss_x, popup_y + 180), 60, 5)
         self.draw_health_bar(overlay, boss_x - 100, popup_y + 260, 200, 25, self.boss.health, self.boss.max_health, COLOR_HEALTH_BOSS)
         self.draw_text_on_surface(overlay, f"{int(self.boss.health)}/{self.boss.max_health}", self.font_info, COLOR_TEXT, (boss_x, popup_y + 295), centered=True)
-
-        # --- 战斗日志 ---
         log_bg_rect = pygame.Rect(popup_x + 50, popup_y + 350, popup_width - 100, 120)
         pygame.draw.rect(overlay, COLOR_BATTLE_LOG_BG, log_bg_rect, border_radius=10)
         y_offset = popup_y + 370
         for log_entry in self.battle_log:
             self.draw_text_on_surface(overlay, log_entry, self.font_battle, COLOR_TEXT, (SCREEN_WIDTH/2, y_offset), centered=True)
             y_offset += 25
-            
         self.screen.blit(overlay, (0, 0))
-    
+        
     def draw_text_on_surface(self, surface, text, font, color, pos, centered=False):
-        """辅助函数，用于在指定的surface上绘制文本"""
         text_surface = font.render(text, True, color)
         rect = text_surface.get_rect(center=pos) if centered else text_surface.get_rect(topleft=pos)
         surface.blit(text_surface, rect)
         
-    # --- Other draw functions remain the same ---
     def draw_text(self, text, font, color, pos, centered=False):
         self.draw_text_on_surface(self.screen, text, font, color, pos, centered)
+        
     def draw_button(self, name, text, center_pos, size, font=None):
         if font is None: font = self.font_button
         rect = pygame.Rect((0, 0), size); rect.center = center_pos; shadow_rect = rect.copy(); shadow_rect.move_ip(5, 5)
@@ -204,18 +272,23 @@ class Game:
         bg_color = COLOR_BTN_HOVER if rect.collidepoint(pygame.mouse.get_pos()) else COLOR_BTN
         pygame.draw.rect(self.screen, bg_color, rect, border_radius=20)
         self.draw_text(text, font, COLOR_TEXT, rect.center, centered=True); self.buttons[name] = rect
+        
     def draw_health_bar(self, surf, x, y, w, h, current, max_val, color):
         if current < 0: current = 0
         fill_pct = current / max_val
         pygame.draw.rect(surf, COLOR_HEALTH_BG, (x, y, w, h), border_radius=5)
         pygame.draw.rect(surf, color, (x, y, w * fill_pct, h), border_radius=5)
         pygame.draw.rect(surf, COLOR_TEXT, (x, y, w, h), 2, border_radius=5)
+        
     def draw_main_menu(self):
+        # ...此函数无变化...
         self.buttons.clear(); self.screen.fill(COLOR_BG)
         self.draw_text("Maze Adventure", self.font_title, COLOR_BTN_SHADOW, (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 4), centered=True)
         self.draw_button('start', 'Start Game', (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2), (280, 75))
         self.draw_button('quit', 'Quit', (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 100), (280, 75))
+        
     def draw_instructions(self):
+        # ...此函数无变化...
         self.buttons.clear(); self.screen.fill(COLOR_BG)
         self.draw_text("Legend", self.font_title, COLOR_BTN_SHADOW, (SCREEN_WIDTH / 2, 80), centered=True)
         legend_items = { GOLD: "Gold: Provides +10 gold.", HEALTH_POTION: "Potion: Restores +20 health.", TRAP: "Trap: A dangerous obstacle.", LOCKER: "Locker: Blocks a treasure area.", SHOP: "Shop: Buy upgrades here.", BOSS: "Boss: The final challenge."}
@@ -229,14 +302,17 @@ class Game:
             self.draw_text(text, self.font_legend, COLOR_HUD_BG, (x_text, y_pos + 5))
         self.draw_button('continue', 'Continue', (SCREEN_WIDTH / 2, SCREEN_HEIGHT - 100), (220, 70))
         self.draw_button('back', 'Back', (100, 50), (150, 60))
+        
     def draw_select_mode(self):
+        # ...此函数无变化...
         self.buttons.clear(); self.screen.fill(COLOR_BG)
         self.draw_text("Select Maze Size", self.font_title, COLOR_BTN_SHADOW, (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 5), centered=True)
         btn_w, btn_h = 220, 70
         self.draw_button('7x7', '7 x 7', (SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.40), (btn_w, btn_h))
         self.draw_button('15x15', '15 x 15', (SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.55), (btn_w, btn_h))
         self.draw_button('31x31', '31 x 31', (SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.70), (btn_w, btn_h))
-        self.draw_button('back', 'Back', (SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.85), (btn_w, btn_h))
+        self.draw_button('back', 'Back', (100, 50), (150, 60))
+        
     def draw_info_panel(self):
         panel_rect = (INFO_PANEL_X, MAZE_AREA_Y, INFO_PANEL_WIDTH, MAZE_AREA_SIZE)
         pygame.draw.rect(self.screen, COLOR_HUD_BG, panel_rect, border_radius=15)
@@ -250,11 +326,21 @@ class Game:
             y_offset += 40
             self.draw_text("Diamonds:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset)); self.draw_text(f"{self.ai_player.diamonds}", self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + 180, y_offset))
             y_offset += 40
-            self.draw_text("Attack:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset)); self.draw_text(f"{self.ai_player.attack}", self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + 180, y_offset))
+            
+            # 【核心修改】动态显示攻击力
+            self.draw_text("Attack:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset))
+            attack_text = f"{self.ai_player.attack}"
+            text_color = COLOR_SUBTEXT
+            if hasattr(self.ai_player, 'attack_boost_this_turn') and self.ai_player.attack_boost_this_turn > 0:
+                attack_text += f" (+{self.ai_player.attack_boost_this_turn})"
+                text_color = COLOR_HEALTH_PLAYER # 使用绿色高亮
+            self.draw_text(attack_text, self.font_info, text_color, (INFO_PANEL_X + 180, y_offset))
+            
             y_offset += 40
             self.draw_text("Skills:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset))
             skill_y = y_offset
             for skill_id in self.ai_player.skills: self.draw_text(f"- {SKILLS[skill_id]['name']}", self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + 140, skill_y)); skill_y += 30
+        
         y_offset = 450
         self.draw_text("CONTROL", self.font_button, COLOR_BTN_HOVER, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), centered=True)
         y_offset += 60
@@ -266,4 +352,3 @@ class Game:
         self.draw_text("CURRENTLY RUNNING:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), centered=True)
         self.draw_text(self.active_algorithm, self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset + 35), centered=True)
         self.draw_button('main_menu', 'Main Menu', (INFO_PANEL_X + INFO_PANEL_WIDTH/2, SCREEN_HEIGHT - 60), (220, 60))
-

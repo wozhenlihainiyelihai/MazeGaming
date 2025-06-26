@@ -1,16 +1,15 @@
-
 import heapq
 from config import *
 
 class BattleNode:
-    """用于分支限界搜索的节点"""
-    def __init__(self, turns, boss_hp, skill_cooldowns, available_skills, path, player):
+    def __init__(self, turns, boss_hp, player_hp, player_gold, available_skills, path, player_base_attack):
         self.g = turns
         self.boss_hp = boss_hp
-        self.skill_cooldowns = skill_cooldowns
+        self.player_hp = player_hp
+        self.player_gold = player_gold
         self.available_skills = available_skills
         self.path = path
-        self.player = player
+        self.player_base_attack = player_base_attack
         self.h = self._get_heuristic_turns()
         self.cost = self.g + self.h
 
@@ -18,70 +17,102 @@ class BattleNode:
         return self.cost < other.cost
 
     def _get_heuristic_turns(self):
-        """更智能的启发函数，考虑所有*可用*技能的平均伤害"""
-        damages = [self.player.attack]
+        """启发函数现在会考虑所有可能的伤害输出方式"""
+        damages = [self.player_base_attack]
+        # 考虑技能伤害
         for skill_id in self.available_skills:
             skill_info = SKILLS.get(skill_id)
             if skill_info and 'damage_multiplier' in skill_info['effect']:
-                damages.append(self.player.attack * skill_info['effect']['damage_multiplier'])
-        avg_damage = sum(damages) / len(damages) if damages else self.player.attack
+                damages.append(self.player_base_attack * skill_info['effect']['damage_multiplier'])
+        # 考虑资源换攻击
+        if self.player_gold >= GOLD_COST_FOR_BOOST:
+            damages.append(self.player_base_attack + ATTACK_BOOST_AMOUNT)
+        if self.player_hp > HEALTH_COST_FOR_BOOST:
+            damages.append(self.player_base_attack + ATTACK_BOOST_AMOUNT)
+            
+        avg_damage = sum(damages) / len(damages) if damages else self.player_base_attack
         return (self.boss_hp / avg_damage) if avg_damage > 0 else float('inf')
 
-def find_best_attack_sequence(player, boss):
-    """【已更新】使用分支限界法，处理一次性技能"""
+def analyze_battle_outcome(player, boss):
+    """
+    【升级】战斗模拟器现在会评估包括资源换攻击在内的所有战术。
+    """
     pq = []
-    initial_skills = player.skills.copy()
-    initial_cooldowns = player.skill_cooldowns.copy()
-    
-    # 【BUG修复】修正了构造函数参数的顺序
-    # Corrected the order of arguments in the constructor call
-    initial_node = BattleNode(0, boss.health, initial_cooldowns, initial_skills, [], player)
+    initial_node = BattleNode(0, boss.health, player.health, player.gold, player.skills.copy(), [], player.attack)
     heapq.heappush(pq, initial_node)
     
-    best_path, min_turns = None, float('inf')
+    # 状态定义：(boss血量, 玩家血量, 玩家金币, 可用技能元组)
+    visited = set()
 
     while pq:
         current_node = heapq.heappop(pq)
-        if current_node.cost >= min_turns: continue
+        
+        state = (current_node.boss_hp, current_node.player_hp, current_node.player_gold, tuple(sorted(current_node.available_skills)))
+        if state in visited:
+            continue
+        visited.add(state)
+
+        # 找到胜利路径
         if current_node.boss_hp <= 0:
-            if current_node.g < min_turns:
-                min_turns, best_path = current_node.g, current_node.path
+            turns_to_win = current_node.g
+            # 初始血量 - 最终血量 = 损失血量
+            health_lost = player.health - current_node.player_hp
+            
+            return {
+                "survives": current_node.player_hp > 0,
+                "turns": turns_to_win,
+                "health_lost": health_lost,
+                "sequence": current_node.path
+            }
+
+        # 如果玩家已死，则此路不通
+        if current_node.player_hp <= 0:
             continue
 
         next_turns = current_node.g + 1
-        
-        # 动作1: 普通攻击
-        # 普通攻击不影响技能冷却，但我们需要传递下一回合的冷却状态
-        next_cooldowns_for_attack = {k: max(0, v - 1) for k, v in current_node.skill_cooldowns.items()}
-        attack_node = BattleNode(next_turns, current_node.boss_hp - player.attack, next_cooldowns_for_attack, current_node.available_skills, current_node.path + ["attack"], player)
-        if attack_node.cost < min_turns: heapq.heappush(pq, attack_node)
+        # Boss在本回合的反击伤害（如果没被冰冻）
+        boss_retaliation_damage = boss.attack if not (current_node.path and current_node.path[-1] == 'frost_nova') else 0
 
-        # 动作2: 遍历所有当前模拟中可用的技能
-        for skill_id in current_node.available_skills:
-            if current_node.skill_cooldowns.get(skill_id, 0) == 0:
-                skill_info = SKILLS[skill_id]
-                next_available_skills = current_node.available_skills - {skill_id}
-                
-                temp_cooldowns = next_cooldowns_for_attack.copy()
-                if 'cooldown' in skill_info: # 检查是否存在冷却键
-                    temp_cooldowns[skill_id] = skill_info['cooldown']
+        # 行动1: 普通攻击
+        player_hp_after_attack = current_node.player_hp - boss_retaliation_damage
+        attack_node = BattleNode(next_turns, current_node.boss_hp - current_node.player_base_attack, player_hp_after_attack, current_node.player_gold, current_node.available_skills, current_node.path + ["attack"], current_node.player_base_attack)
+        heapq.heappush(pq, attack_node)
 
-                temp_boss_hp = current_node.boss_hp
-                if 'damage_multiplier' in skill_info['effect']:
-                    temp_boss_hp -= player.attack * skill_info['effect']['damage_multiplier']
-                
-                skill_node = BattleNode(next_turns, temp_boss_hp, temp_cooldowns, next_available_skills, current_node.path + [skill_id], player)
-                if skill_node.cost < min_turns: heapq.heappush(pq, skill_node)
+        # 行动2: 使用技能
+        for skill_id in list(current_node.available_skills):
+            skill_info = SKILLS[skill_id]
+            next_skills = current_node.available_skills - {skill_id}
+            
+            temp_boss_hp = current_node.boss_hp
+            if 'damage_multiplier' in skill_info['effect']:
+                temp_boss_hp -= current_node.player_base_attack * skill_info['effect']['damage_multiplier']
 
-    if best_path: return best_path[0]
+            # 使用冰冻技能可以免受本次反击
+            player_hp_after_skill = current_node.player_hp - (0 if 'freeze_turns' in skill_info['effect'] else boss_retaliation_damage)
+
+            skill_node = BattleNode(next_turns, temp_boss_hp, player_hp_after_skill, current_node.player_gold, next_skills, current_node.path + [skill_id], current_node.player_base_attack)
+            heapq.heappush(pq, skill_node)
+
+        #行动3: 消耗金币提升攻击
+        if current_node.player_gold >= GOLD_COST_FOR_BOOST:
+            player_hp_after_boost = current_node.player_hp - boss_retaliation_damage
+            boost_gold_node = BattleNode(next_turns, current_node.boss_hp - (current_node.player_base_attack + ATTACK_BOOST_AMOUNT), player_hp_after_boost, current_node.player_gold - GOLD_COST_FOR_BOOST, current_node.available_skills, current_node.path + ["boost_gold_attack"], current_node.player_base_attack)
+            heapq.heappush(pq, boost_gold_node)
+            
+        # 行动4: 消耗生命提升攻击
+        if current_node.player_hp > HEALTH_COST_FOR_BOOST:
+            # 先扣除消耗的生命，再扣除Boss反击的伤害
+            player_hp_after_boost = (current_node.player_hp - HEALTH_COST_FOR_BOOST) - boss_retaliation_damage
+            boost_health_node = BattleNode(next_turns, current_node.boss_hp - (current_node.player_base_attack + ATTACK_BOOST_AMOUNT), player_hp_after_boost, current_node.player_gold, current_node.available_skills, current_node.path + ["boost_health_attack"], current_node.player_base_attack)
+            heapq.heappush(pq, boost_health_node)
+
+    # 如果队列为空都没找到获胜路径
+    return {"survives": False, "turns": float('inf'), "health_lost": float('inf'), "sequence": []}
+
+
+def find_best_attack_sequence(player, boss):
+    """此函数现在调用新的战斗模拟器，只返回最佳的第一步行动。"""
+    analysis = analyze_battle_outcome(player, boss)
+    if analysis and analysis["sequence"]:
+        return analysis["sequence"][0]
     return "attack"
-
-def get_heuristic_turns(player):
-    """一个独立的启发函数，供AI在探索时评估Boss威胁"""
-    damages = [player.attack]
-    for skill_id in player.skills:
-        skill_info = SKILLS.get(skill_id)
-        if skill_info and 'damage_multiplier' in skill_info['effect']:
-            damages.append(player.attack * skill_info['effect']['damage_multiplier'])
-    avg_damage = sum(damages) / len(damages) if damages else player.attack
-    return (BOSS_MAX_HEALTH / avg_damage) if avg_damage > 0 else float('inf')

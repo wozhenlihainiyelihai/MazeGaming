@@ -22,7 +22,8 @@ COLOR_BATTLE_LOG_BG = (30, 40, 50, 220) # 日志背景更实一些，确保文�
 
 
 # --- Game States & Algorithm Types ---
-STATE_MAIN_MENU, STATE_INSTRUCTIONS, STATE_SELECT_MODE, STATE_GAMEPLAY, STATE_BATTLE, STATE_QUIT = range(6)
+# 【功能新增】添加了选择迷宫来源的新状态
+STATE_MAIN_MENU, STATE_INSTRUCTIONS, STATE_CHOOSE_MAZE_SOURCE, STATE_SELECT_MODE, STATE_GAMEPLAY, STATE_BATTLE, STATE_QUIT = range(7)
 ALGO_GREEDY, ALGO_DP_VISUALIZATION, ALGO_RANDOM = 'Greedy (Strategic)', 'DP (Optimal Path)', 'Random Walk'
 
 # --- Maze Element Constants ---
@@ -38,7 +39,7 @@ TRAP_GOLD_COST, TRAP_HEALTH_COST = 15, 20
 GOLD_REWARD, POTION_HEAL_AMOUNT, LOCKER_COST = 10, 20, 5
 
 # --- 通关评分量化 ---
-SCORE_BOSS_KILL, SCORE_LOCKER_UNLOCK = 1000, 100
+SCORE_BOSS_KILL, SCORE_LOCKER_UNLOCK = 100, 100
 SCORE_PER_GOLD, SCORE_PER_DIAMOND, SCORE_PER_HEALTH = 1, 50, 2
 TIME_PENALTY_PER_5_SECONDS = 1
 
@@ -48,7 +49,10 @@ BOSS_MAX_HEALTH, BOSS_ATTACK = 100, 10
 
 # --- 技能系统定义 ---
 SKILLS = {
-    'power_strike': {'name': 'Power Strike', 'cost': 1, 'effect': {'damage_multiplier': 2.0}},
-    'frost_nova': {'name': 'Frost Nova', 'cost': 1, 'effect': {'freeze_turns': 1}}
+    'power_strike': {'name': 'Power!', 'cost': 1, 'effect': {'damage_multiplier': 2.0}},
+    'frost_nova': {'name': 'Frozen!', 'cost': 1, 'effect': {'freeze_turns': 1}}
 }
 
+ATTACK_BOOST_AMOUNT = 5      # 每次提升所增加的攻击力
+GOLD_COST_FOR_BOOST = 15     # 提升攻击力所需消耗的金币
+HEALTH_COST_FOR_BOOST = 10   # 提升攻击力所需消耗的生命值

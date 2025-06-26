@@ -1,4 +1,4 @@
-#包含Maze类，使用分治法生成迷宫，并根据规则智能地放置所有游戏元素。
+#包含Maze类，使用分治法生成迷宫，或从文件导入，并根据规则智能地放置所有游戏元素。
 
 import pygame
 import random
@@ -8,24 +8,69 @@ from entities import Tile
 from utils import create_all_icons
 
 class Maze:
-    """迷宫生成与管理类"""
-    def __init__(self, size):
-        self.size = size if size % 2 != 0 else size + 1
-        self.grid = [[Tile(PATH) for _ in range(self.size)] for _ in range(self.size)]
+    """迷宫生成与管理类 (支持随机生成或从文件加载)"""
+    def __init__(self, size=None, source_data=None):
+        if source_data:
+            # 如果提供了源数据，则从数据加载
+            self._load_from_data(source_data)
+            # 加载的迷宫假定已包含所有元素，不执行随机放置逻辑
+        elif size:
+            # 否则，随机生成迷宫
+            self.size = size if size % 2 != 0 else size + 1
+            self.grid = [[Tile(PATH) for _ in range(self.size)] for _ in range(self.size)]
+            self._generate_base_maze()
+            self._place_start_end_points()
+            main_path = self._find_main_path()
+            if main_path:
+                large_treasure_rooms = self._create_gated_treasure_rooms(main_path)
+                self._place_boss(main_path, large_treasure_rooms)
+                self._place_traps_on_main_path(main_path)
+        else:
+            raise ValueError("Maze constructor requires either a 'size' for generation or 'source_data' for loading.")
+
+        # ---- 通用初始化步骤 ----
         self.cell_width = MAZE_AREA_SIZE // self.size
         self.cell_height = MAZE_AREA_SIZE // self.size
         
-        self._generate_base_maze()
-        self._place_start_end_points()
-        main_path = self._find_main_path()
-        if main_path:
-            large_treasure_rooms = self._create_gated_treasure_rooms(main_path)
-            self._place_boss(main_path, large_treasure_rooms)
-            self._place_traps_on_main_path(main_path)
-            
-        # 【功能新增】保存一份原始地图的快照，用于重置
+        # 保存一份原始地图的快照，用于重置
         self.pristine_grid = [[Tile(tile.type) for tile in row] for row in self.grid]
         self._load_icons()
+
+    def _load_from_data(self, maze_data):
+        """【功能新增】从一个字符列表的列表加载迷宫"""
+        # 定义从文件字符到游戏常量 tile type 的映射
+        CHAR_TO_TILE = {
+            '#': WALL, ' ': PATH, 'S': START, 'E': END, 'B': BOSS,
+            'L': LOCKER, 'G': GOLD, 'T': TRAP, 'P': SHOP, 'H': HEALTH_POTION
+        }
+        self.size = len(maze_data)
+        self.grid = [[Tile(PATH) for _ in range(self.size)] for _ in range(self.size)]
+
+        found_start = False
+        found_end = False
+
+        for r, row_list in enumerate(maze_data):
+            for c, char in enumerate(row_list):
+                tile_type = CHAR_TO_TILE.get(char, PATH)
+                self.grid[r][c].type = tile_type
+                if tile_type == START:
+                    self.start_pos = (c, r)
+                    found_start = True
+                elif tile_type == END:
+                    self.end_pos = (c, r)
+                    found_end = True
+        
+        if not found_start:
+            # 如果没有找到起点，设置一个默认值以避免崩溃
+            self.start_pos = (1, 1)
+            self.grid[1][1].type = START
+            print("Warning: Start point 'S' not found in maze file. Using default (1,1).")
+        if not found_end:
+            # 如果没有找到终点，设置一个默认值
+            self.end_pos = (self.size - 2, self.size - 2)
+            self.grid[self.size - 2][self.size - 2].type = END
+            print(f"Warning: End point 'E' not found in maze file. Using default ({self.size-2},{self.size-2}).")
+
 
     def reset(self):
         """【功能新增】将地图恢复到初始状态"""
