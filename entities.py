@@ -31,7 +31,6 @@ class Boss:
 class AIPlayer:
     """【最终版】AI角色类 (贪心算法 + 开锁后临时目标策略)"""
     def __init__(self, start_pos=(1,1)):
-        # 基础属性
         self.x, self.y = start_pos
         self.color = (10, 10, 10)
         self.max_health = 100
@@ -39,23 +38,15 @@ class AIPlayer:
         self.gold = 20
         self.attack = PLAYER_BASE_ATTACK
         self.diamonds = 0
-        
-        # 技能系统
         self.skills = set()
         self.skill_cooldowns = {}
-        
-        # 记录初始位置和Boss战状态
         self.start_pos = start_pos
         self.boss_defeated = False
-
-        # 状态
         self.is_active = True
         self.path_to_follow = []
         self.temporary_target = None
         self.attack_boost_this_turn = 0
-        
-        # 短期记忆，用于存储上一个位置
-        self.previous_pos = None
+        self.path_history = deque(maxlen=5)
 
     def decide_move(self, maze, algorithm):
         """决策逻辑现在会根据算法类型调用正确的函数"""
@@ -85,9 +76,9 @@ class AIPlayer:
         next_x, next_y = self.x + dx, self.y + dy
         if 0 <= next_x < maze.size and 0 <= next_y < maze.size:
              if maze.grid[next_y][next_x].type != WALL:
-                self.previous_pos = (self.x, self.y)
                 self.x = next_x
                 self.y = next_y
+                self.path_history.append((self.x, self.y))
                 return True
         return False
 

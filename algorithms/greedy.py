@@ -80,8 +80,7 @@ def decide_move_greedy(player, maze):
 
             target_x, target_y = player.x + c_offset, player.y + r_offset
 
-            # 【核心修改】增加判断，如果目标是上一个位置，则跳过，避免回头
-            if (target_x, target_y) == player.previous_pos:
+            if (target_x, target_y) in player.path_history:
                 continue
 
             if (0 <= target_x < maze.size and 0 <= target_y < maze.size and
@@ -91,7 +90,6 @@ def decide_move_greedy(player, maze):
                 value = get_tile_value(tile.type, player, maze, (target_x, target_y))
                 
                 if value > 0:
-                    # ... (后续的性价比计算逻辑无变化) ...
                     path_to_target_in_view = bfs_path(start=(player.x, player.y), end=(target_x, target_y), maze_grid=maze.grid)
                     if path_to_target_in_view:
                         distance = len(path_to_target_in_view) - 1
@@ -110,13 +108,21 @@ def decide_move_greedy(player, maze):
         final_path = bfs_path(start=(player.x, player.y), end=best_target, maze_grid=maze.grid)
         if final_path and len(final_path) > 1:
             next_step = final_path[1]
-            # 【健壮性修改】如果走向终点的下一步是回头路，而我们有其他选择，则重新考虑
-            if next_step == player.previous_pos:
-                # 寻找其他非回头路的选择
+            if next_step in player.path_history:
+                # 寻找其他不在历史记录里的选择
                 for move in final_path[1:]:
-                    if move != player.previous_pos:
+                    if move not in player.path_history:
                         next_step = move
                         break
             return (next_step[0] - player.x, next_step[1] - player.y)
+        
+    # 如果实在无路可走（比如被堵死），允许走回头路
+    # 这是一个最后的保险措施
+    if player.path_history:
+        # 尝试回到上一个点
+        last_pos = player.path_history[-1] # This is current position
+        if len(player.path_history) > 1:
+            prev_pos = player.path_history[-2]
+            return (prev_pos[0] - player.x, prev_pos[1] - player.y)
 
     return (0, 0)
