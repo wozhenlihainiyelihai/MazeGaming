@@ -46,9 +46,29 @@ class AIPlayer:
     def decide_move(self, maze, algorithm):
         from algorithms.greedy import decide_move_greedy as simple_greedy_move
         if not self.is_active: return (0, 0)
-        if algorithm == ALGO_GREEDY:
+
+        if algorithm == ALGO_DP_VISUALIZATION:
+            # 如果路径为空，不动
+            if not self.path_to_follow:
+                return (0, 0)
+
+            # 如果AI当前位置就是路径的下一个点（例如，刚开始或重置后），则弹出该点，目标设为路径中的下一个点
+            if (self.x, self.y) == self.path_to_follow[0]:
+                self.path_to_follow.pop(0)
+            
+            # 如果弹出后路径为空（说明已经走完），则不动
+            if not self.path_to_follow:
+                return (0, 0)
+
+            # 计算走向路径中下一个点的方向
+            next_pos = self.path_to_follow[0]
+            dx = next_pos[0] - self.x
+            dy = next_pos[1] - self.y
+            return (dx, dy)
+
+        elif algorithm == ALGO_GREEDY:
             return simple_greedy_move(self, maze)
-        # ... DP 逻辑无变化 ...
+        
         return (0, 0)
         
     def update(self, maze, sound_manager, algorithm):
