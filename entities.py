@@ -1,11 +1,9 @@
-# entities.py (重构版)
+# entities.py
 
 import random
 from collections import deque 
 import pygame
 from config import *
-
-# 【删除】不再从此文件导入任何算法相关的函数
 
 class Tile:
     def __init__(self, tile_type=PATH):
@@ -68,7 +66,7 @@ class AIPlayer:
 
         elif algorithm == ALGO_GREEDY:
             return simple_greedy_move(self, maze)
-        
+        # DP 逻辑无变化
         return (0, 0)
         
     def update(self, maze, sound_manager, algorithm):
@@ -89,7 +87,6 @@ class AIPlayer:
         return False
 
     def interact_with_tile(self, maze, sound_manager):
-        """【修改】交互后只设置状态旗帜，不再执行扫描逻辑"""
         tile = maze.grid[self.y][self.x]
         
         # 到达临时目标后，也需要一个新的目标
