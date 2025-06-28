@@ -29,7 +29,7 @@ class Game:
         self.battle_log = deque(maxlen=5)
 
         try:
-            font_name = 'markerfelt'
+            font_name = '楷体-简'
             self.font_title = pygame.font.SysFont(font_name, 80); self.font_button = pygame.font.SysFont(font_name, 50)
             self.font_info = pygame.font.SysFont(font_name, 32); self.font_info_bold = pygame.font.SysFont(font_name, 36, bold=True)
             self.font_legend = pygame.font.SysFont(font_name, 40); self.font_battle = pygame.font.SysFont(font_name, 28)
@@ -225,7 +225,6 @@ class Game:
         self.draw_button('back', 'Back', (100, 50), (150, 60))
 
     def draw_battle_screen(self):
-        # ...此函数无变化...
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         popup_width, popup_height = 800, 500
         popup_x = (SCREEN_WIDTH - popup_width) / 2
@@ -324,7 +323,7 @@ class Game:
             self.draw_text("Diamonds:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset)); self.draw_text(f"{self.ai_player.diamonds}", self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + 180, y_offset))
             y_offset += 40
             
-            # 【核心修改】动态显示攻击力
+            # 动态显示攻击力
             self.draw_text("Attack:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset))
             attack_text = f"{self.ai_player.attack}"
             text_color = COLOR_SUBTEXT
@@ -341,11 +340,11 @@ class Game:
         y_offset = 450
         self.draw_text("CONTROL", self.font_button, COLOR_BTN_HOVER, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), centered=True)
         y_offset += 60
-        btn_w, btn_h, btn_font = 240, 55, pygame.font.SysFont('markerfelt', 35) if 'markerfelt' in pygame.font.get_fonts() else pygame.font.SysFont(None, 35)
+        btn_w, btn_h, btn_font = 240, 55, pygame.font.SysFont('楷体-简', 35) if 'markerfelt' in pygame.font.get_fonts() else pygame.font.SysFont(None, 35)
         self.draw_button(ALGO_GREEDY, "Run Greedy AI", (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), (btn_w, btn_h), font=btn_font)
         y_offset += 75
         self.draw_button(ALGO_DP_VISUALIZATION, "Show DP Path", (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), (btn_w, btn_h), font=btn_font)
         y_offset = 650
-        self.draw_text("CURRENTLY RUNNING:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), centered=True)
+        self.draw_text("RUNNING:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset), centered=True)
         self.draw_text(self.active_algorithm, self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + INFO_PANEL_WIDTH / 2, y_offset + 35), centered=True)
-        self.draw_button('main_menu', 'Main Menu', (INFO_PANEL_X + INFO_PANEL_WIDTH/2, SCREEN_HEIGHT - 60), (220, 60))
+        self.draw_button('main_menu', 'Menu', (INFO_PANEL_X + INFO_PANEL_WIDTH/2, SCREEN_HEIGHT - 60), (220, 60))
