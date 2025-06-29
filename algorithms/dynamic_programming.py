@@ -6,7 +6,7 @@ from collections import defaultdict
 
 def _run_a_star_phase(maze, start_pos, end_pos, resources, initial_context):
     """
-    一个通用的A*搜索阶段函数。
+    的A*搜索阶段函数。
 
     Args:
         maze (Maze): 迷宫对象。
@@ -30,7 +30,7 @@ def _run_a_star_phase(maze, start_pos, end_pos, resources, initial_context):
     #   - gold: 到达该状态时的金币数
     dp = {}
 
-    # A*算法的启发函数 (Heuristic)
+    # A*算法的启发函数
     # 使用曼哈顿距离，估算从当前点到终点的最短距离，用于引导搜索方向
     def heuristic(x, y):
         return abs(x - end_pos[0]) + abs(y - end_pos[1])
@@ -59,7 +59,7 @@ def _run_a_star_phase(maze, start_pos, end_pos, resources, initial_context):
     )
 
     # 优先队列 (Min-Heap)，用于A*搜索
-    # 存储元组 (f_value, state)
+    # pq中存储元组 (f_value, state)
     # f_value = -score + heuristic。因为 heapq 是最小堆，所以对 score 取负，以实现按分数从高到低排序
     pq = [(heuristic(start_pos[0], start_pos[1]) - initial_score, initial_state)]
 
@@ -67,7 +67,7 @@ def _run_a_star_phase(maze, start_pos, end_pos, resources, initial_context):
     best_score_at_end = float('-inf')  # 记录到达终点时的最高最终得分
     visited_count = 0  # 计数器，用于调试和监控算法性能
 
-    while pq:
+    while pq:       #队列不为空时搜索
         visited_count += 1
         if visited_count % 500 == 0:
             print(f"  [A* Status] Visited states: {visited_count}, Queue size: {len(pq)}")
@@ -114,10 +114,10 @@ def _run_a_star_phase(maze, start_pos, end_pos, resources, initial_context):
                         temp_gold += 100
                     elif res_type == HEALTH_POTION:
                         temp_health = min(100, temp_health + 20)
-                    elif res_type == BOSS:
-                        temp_health -= 30
-                    elif res_type == LOCKER:
-                        temp_gold -= 10  # 开启LOCKER需要消耗30金币
+                    # elif res_type == BOSS:
+                    #     temp_health -= 30
+                    # elif res_type == LOCKER:
+                    #     temp_gold -= 10  # 开启LOCKER需要消耗10金币
 
                     # 只有在交互后生命值大于0的情况下，才认为此次交互有效
                     if temp_health > 0:
@@ -136,9 +136,9 @@ def _run_a_star_phase(maze, start_pos, end_pos, resources, initial_context):
                     print(f"  [A* Update] Found better path to ({next_x},{next_y}), "
                           f"Old score: {dp[new_state][0]:.0f}, New score: {new_score:.0f}")
 
+                # 更新dp表
                 dp[new_state] = (new_score, current, new_health, new_gold)
-                # 启发值权重乘以2，加强启发式引导，更快地朝向终点
-                f_value = -new_score + heuristic(next_x, next_y) * 2
+                f_value = -new_score + heuristic(next_x, next_y)
                 heapq.heappush(pq, (f_value, new_state))
 
     return best_at_end, dp
@@ -146,6 +146,7 @@ def _run_a_star_phase(maze, start_pos, end_pos, resources, initial_context):
 
 def calculate_dp_path(maze):
     """
+    核心入口函数
     分阶段动态规划主函数，用于解决整个迷宫问题。
     策略核心是：如果地图上有Boss，则强制执行"先打Boss，后去终点"的两阶段寻路。
     """
@@ -180,8 +181,7 @@ def calculate_dp_path(maze):
     # --- 3. 有Boss情况处理：阶段 1 (从起点到Boss) ---
     print(f"\n[DP Path] Starting Phase 1: Start {maze.start_pos} -> Boss {boss_pos}")
     
-    # 新的均衡资源选择策略：为不同类型的资源设置配额，并优先选择离起点近的。
-    # 这样可以避免候选列表被单一类型的资源（如血瓶）占满。
+    #将所有非Boss类型的资源按照资源类型分类
     resources_by_type = defaultdict(list)
     for res in all_resources:
         if res[2] != BOSS:  # Boss 不是需要收集的资源
@@ -195,12 +195,13 @@ def calculate_dp_path(maze):
         # 15x15地图: 共选择10个资源 (5血瓶, 5金币)
         quotas = {HEALTH_POTION: 5, GOLD: 5}
     elif maze.size == 31:
-        # 31x31地图: 共选择20个资源 (10血瓶, 10金币)
-        quotas = {HEALTH_POTION: 10, GOLD: 10}
+        # 31x31地图: 共选择24个资源 (12血瓶, 12金币)
+        quotas = {HEALTH_POTION: 12, GOLD: 12}
     else:
         # 其他尺寸地图的默认配额
         quotas = {HEALTH_POTION: 5, GOLD: 5}
 
+    # 从不同类型资源中选取资源，构建路径1中可交互资源列表
     resources_p1 = []
     # 为了让选择过程稳定可复现，我们按资源类型的值排序来遍历
     sorted_types = sorted(quotas.keys(), reverse=True)
@@ -218,7 +219,7 @@ def calculate_dp_path(maze):
     best_boss_state, dp1 = _run_a_star_phase(maze, maze.start_pos, boss_pos, resources_p1,
                                              {'score': 0, 'health': 100, 'gold': 20})
 
-    if not best_boss_state:
+    if not best_boss_state: # 找不到从起点->boss的路径
         print("[DP Path] CRITICAL: Could not find a path to the boss.")
         return [], 0
     print(f"[DP Path] Phase 1 Complete! Arrived at boss with score {dp1[best_boss_state][0]:.0f}.")
