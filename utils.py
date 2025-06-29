@@ -93,7 +93,7 @@ def create_all_icons(icon_size):
 
 def bfs_path_avoiding_history(start, end, maze_grid, history_path=set()):
     """
-    一个改进的BFS寻路算法，它会避免走已经走过的点。
+    BFS寻路算法，避免走已经走过的点。
     """
     queue = deque([[start]])
     visited = {start}

@@ -1,7 +1,7 @@
 # config.py
 # 存储所有全局配置和常量，方便统一管理和修改。
 
-# --- Layout Settings ---
+# Layout Settings 
 SCREEN_WIDTH, SCREEN_HEIGHT = 1055, 800
 MAZE_AREA_SIZE = 780
 MAZE_AREA_X = (SCREEN_HEIGHT - MAZE_AREA_SIZE) // 2
@@ -10,22 +10,21 @@ INFO_PANEL_WIDTH = SCREEN_WIDTH - MAZE_AREA_SIZE - MAZE_AREA_X
 INFO_PANEL_X = MAZE_AREA_X + MAZE_AREA_SIZE
 FPS = 60
 
-# --- Color Palette ---
+# Color Palette 
 COLOR_BG = (135, 206, 235); COLOR_WALL = (146, 209, 79); COLOR_PATH = (245, 245, 245)
 COLOR_GRID = (189, 215, 166); COLOR_HUD_BG = (44, 62, 80); COLOR_TEXT = (255, 255, 255)
 COLOR_SUBTEXT = (255, 236, 139); COLOR_BTN = (221, 46, 68); COLOR_BTN_HOVER = (252, 212, 0)
 COLOR_BTN_SHADOW = (161, 26, 48); COLOR_DP_PATH = (255, 69, 0, 150)
-# 【UI优化】调整了弹窗和战斗日志背景色的不透明度
-COLOR_POPUP_BG = (44, 62, 80, 190) # 背景更透明一些
+COLOR_POPUP_BG = (44, 62, 80, 190) # 背景透明
 COLOR_HEALTH_PLAYER = (0, 255, 127); COLOR_HEALTH_BOSS = (255, 69, 0); COLOR_HEALTH_BG = (70, 70, 70)
-COLOR_BATTLE_LOG_BG = (30, 40, 50, 220) # 日志背景更实一些，确保文字清晰
+COLOR_BATTLE_LOG_BG = (30, 40, 50, 220) # 日志背景
 
 
-# --- Game States & Algorithm Types ---
+# Game States & Algorithm Types
 STATE_MAIN_MENU, STATE_INSTRUCTIONS, STATE_CHOOSE_MAZE_SOURCE, STATE_SELECT_MODE, STATE_GAMEPLAY, STATE_BATTLE, STATE_PUZZLE, STATE_QUIT = range(8)
 ALGO_GREEDY, ALGO_DP_VISUALIZATION, ALGO_RANDOM = 'Greedy (Strategic)', 'DP (Optimal Path)', 'Random Walk'
 
-# --- Maze Element Constants ---
+# Maze Element Constants
 WALL, PATH, START, END, BOSS, LOCKER, GOLD, TRAP, HEALTH_POTION, SHOP = range(10)
 TILE_TYPE_COLORS = {
     WALL: COLOR_WALL, PATH: COLOR_PATH, START: (19, 201, 242), END: (221, 46, 68),
@@ -33,21 +32,21 @@ TILE_TYPE_COLORS = {
     HEALTH_POTION: COLOR_PATH, SHOP: COLOR_PATH,
 }
 
-# --- 游戏机制量化 ---
+# 游戏机制量化
 TRAP_GOLD_COST, TRAP_HEALTH_COST = 15, 20
 GOLD_REWARD, POTION_HEAL_AMOUNT = 10, 20
 PUZZLE_REWARD_DIAMONDS = 1
 
-# --- 通关评分量化 ---
+# 通关评分量化
 SCORE_BOSS_KILL, SCORE_LOCKER_UNLOCK = 100, 100
 SCORE_PER_GOLD, SCORE_PER_DIAMOND, SCORE_PER_HEALTH = 1, 50, 2
 TIME_PENALTY_PER_5_SECONDS = 1
 
-# --- 玩家与Boss属性 ---
+# 玩家与Boss属性
 PLAYER_BASE_ATTACK = 5
 BOSS_MAX_HEALTH, BOSS_ATTACK = 100, 10
 
-# --- 技能系统定义 ---
+# 技能系统定义 
 SKILLS = {
     'power_strike': {'name': 'Power!', 'cost': 1, 'effect': {'damage_multiplier': 2.0}},
     'frost_nova': {'name': 'Frozen!', 'cost': 1, 'effect': {'freeze_turns': 1}}

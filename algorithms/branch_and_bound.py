@@ -36,7 +36,7 @@ class BattleNode:
 
 def analyze_battle_outcome(player, boss):
     """
-    【升级】战斗模拟器现在会评估包括资源换攻击在内的所有战术。
+    战斗模拟器现在会评估包括资源换攻击在内的所有战术。
     """
     pq = []
     initial_node = BattleNode(0, boss.health, player.health, player.gold, player.skills.copy(), [], player.attack)
@@ -112,7 +112,7 @@ def analyze_battle_outcome(player, boss):
 
 
 def find_best_attack_sequence(player, boss):
-    """此函数现在调用新的战斗模拟器，只返回最佳的第一步行动。"""
+    """调用新的战斗模拟器，只返回最佳的第一步行动。"""
     analysis = analyze_battle_outcome(player, boss)
     if analysis and analysis["sequence"]:
         return analysis["sequence"][0]
