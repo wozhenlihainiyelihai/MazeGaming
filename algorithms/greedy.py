@@ -4,12 +4,11 @@ from utils import bfs_path_avoiding_history # 从中立的 utils 导入
 from algorithms.branch_and_bound import analyze_battle_outcome
 
 def get_tile_value(tile_type, player, maze=None, pos=None):
-    # ... 此函数内容无变化 ...
     if tile_type == GOLD: return GOLD_REWARD * SCORE_PER_GOLD
     if tile_type == HEALTH_POTION:
         if player.health >= 100: return 0
         return (POTION_HEAL_AMOUNT * SCORE_PER_HEALTH) + (100 - player.health)
-    if tile_type == LOCKER: return (SCORE_PER_DIAMOND + 20) if player.gold >= LOCKER_COST else -1
+    if tile_type == LOCKER: return SCORE_PER_DIAMOND + 20
     if tile_type == TRAP: return -50 if player.gold < TRAP_GOLD_COST else -10
     if tile_type == SHOP:
         can_afford = any(skill not in player.skills and player.diamonds >= SKILLS[skill]['cost'] for skill in SKILLS)

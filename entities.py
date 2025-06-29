@@ -112,11 +112,7 @@ class AIPlayer:
             if self.gold >= TRAP_GOLD_COST: self.gold -= TRAP_GOLD_COST
             else: self.health -= TRAP_HEALTH_COST
         elif tile.type == LOCKER:
-            if self.gold >= LOCKER_COST:
-                self.gold -= LOCKER_COST; self.diamonds += 1; tile.type = PATH
-                self.needs_new_target = True
-            else:
-                tile.type = WALL
+            return 'start_puzzle'
         elif tile.type == BOSS and not self.boss_defeated:
              return 'start_battle'
         elif tile.type == END:

@@ -1,61 +1,115 @@
+import hashlib
+import random
 
-import time
-
+# --- Helper Functions ---
 def is_prime(n):
-    """检查一个数字是否为素数"""
-    if n < 2:
-        return False
+    if n < 2: return False
     for i in range(2, int(n**0.5) + 1):
-        if n % i == 0:
-            return False
+        if n % i == 0: return False
     return True
 
-def solve_prime_puzzle():
-    """
-    【已实现】使用回溯法解决“3位不重复素数密码锁”问题。
-    这是一个生成器函数，它会逐步(yield)返回其搜索过程，以便在UI上进行可视化。
-    
-    输出 (yield):
-        (list, str): 一个元组，包含当前的密码尝试(current_path)和状态信息(status_text)。
-    """
-    
-    # 规则：密码是3位，每位都是一位数（0-9）中的素数，且数字不能重复。
-    # 一位数的素数有: 2, 3, 5, 7
-    candidates = [2, 3, 5, 7]
+def is_even(n): return n % 2 == 0
+def is_odd(n): return n % 2 != 0
+
+def get_candidates_for_pos(pos, current_path, clues, length):
+    candidates = [c for c in list(range(10)) if c not in current_path]
+    for clue in clues:
+        if clue == [-1, -1]:
+            candidates = [c for c in candidates if is_prime(c)]
+        elif len(clue) == 2:
+            clue_pos, prop = clue
+            if clue_pos == pos + 1:
+                if prop == 0: candidates = [c for c in candidates if is_even(c)]
+                elif prop == 1: candidates = [c for c in candidates if is_odd(c)]
+        elif len(clue) == length:
+            fixed_digit = clue[pos]
+            if fixed_digit != -1:
+                return [fixed_digit] if fixed_digit in candidates else []
+    return candidates
+
+# --- Solver Implementations for Different Methods ---
+
+def _solve_method_1(clues, target_hash, length, salt, tries_counter):
+    """Method 1: Optimized backtracking with pre-filtering candidates."""
     path = []
-    
-    def backtrack(start_index):
-        # 状态文本：显示正在尝试的路径
-        status_text = f"Trying: {path}"
-        yield list(path), status_text
-        time.sleep(0.1) # 减慢速度以便观察
-
-        # 找到一个完整的3位密码
-        if len(path) == 3:
-            status_text = f"Found Solution: {path}"
-            yield list(path), status_text
-            # 返回True表示找到了一个解，可以停止搜索
-            return True
-
-        # 从候选数字中选择
-        for i in range(len(candidates)):
-            num = candidates[i]
-            if num in path:
-                continue # 数字已在路径中，跳过
-
-            # 做出选择
+    def backtrack():
+        current_pos = len(path)
+        if current_pos == length:
+            tries_counter["count"] += 1
+            password_str = "".join(map(str, path))
+            yield list(path), f"Hashing '{password_str}'...", tries_counter["count"]
+            password_bytes = password_str.encode('utf-8')
+            current_hash = hashlib.sha256(salt + password_bytes).hexdigest()
+            if current_hash == target_hash:
+                yield list(path), f"Success! Password: {password_str}", tries_counter["count"]
+                return True
+            return False
+        
+        candidates = get_candidates_for_pos(current_pos, path, clues, length)
+        for num in candidates:
             path.append(num)
-            
-            # 向下探索
-            # 通过 `yield from` 将子生成器的所有产出传递出去
-            if (yield from backtrack(i + 1)):
-                return True # 如果子问题找到了解，直接返回
-
-            # 撤销选择 (回溯)
-            status_text = f"Backtracking from {path}"
+            yield list(path), f"Trying: {path}", tries_counter["count"]
+            if (yield from backtrack()): return True
             path.pop()
-            yield list(path), status_text
-            time.sleep(0.1)
+        return False
+    yield from backtrack()
 
-    # 启动回溯过程
-    yield from backtrack(0)
+def _solve_method_2(clues, target_hash, length, salt, tries_counter, randomize=False):
+    """Method 2 & 3: Naive backtracking, trying all digits from 0-9."""
+    path = []
+    def is_valid(num, pos):
+        if num in path: return False
+        for clue in clues:
+            if clue == [-1, -1]:
+                if not is_prime(num): return False
+            elif len(clue) == 2:
+                clue_pos, prop = clue
+                if clue_pos == pos + 1:
+                    if prop == 0 and not is_even(num): return False
+                    if prop == 1 and not is_odd(num): return False
+            elif len(clue) == length:
+                if clue[pos] != -1 and num != clue[pos]: return False
+        return True
+
+    def backtrack():
+        current_pos = len(path)
+        if current_pos == length:
+            tries_counter["count"] += 1
+            password_str = "".join(map(str, path))
+            yield list(path), f"Hashing '{password_str}'...", tries_counter["count"]
+            password_bytes = password_str.encode('utf-8')
+            current_hash = hashlib.sha256(salt + password_bytes).hexdigest()
+            if current_hash == target_hash:
+                yield list(path), f"Success! Password: {password_str}", tries_counter["count"]
+                return True
+            return False
+
+        candidate_digits = list(range(10))
+        if randomize:
+            random.shuffle(candidate_digits)
+            
+        for num in candidate_digits:
+            yield list(path), f"Trying: {path}", tries_counter["count"]
+            if is_valid(num, current_pos):
+                path.append(num)
+                if (yield from backtrack()): return True
+                path.pop()
+        return False
+    yield from backtrack()
+
+# --- Main Entry Point ---
+def solve_puzzle_by_method(method, clues, target_hash, length, salt, tries_counter):
+    """
+    Selects a backtracking method to solve the puzzle.
+    Now yields (path, status, tries_count).
+    """
+    if method == "method1":
+        return _solve_method_1(clues, target_hash, length, salt, tries_counter)
+    elif method == "method2":
+        return _solve_method_2(clues, target_hash, length, salt, tries_counter, randomize=False)
+    elif method == "method3":
+        return _solve_method_2(clues, target_hash, length, salt, tries_counter, randomize=True)
+    else:
+        # Fallback to the best method
+        return _solve_method_1(clues, target_hash, length, salt, tries_counter)
+
