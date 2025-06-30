@@ -244,12 +244,11 @@ class Game:
             locker_tile = self.maze.grid[self.ai_player.y][self.ai_player.x]
             locker_tile.type = WALL  # 储物柜变为墙
 
-            # --- 智能撤退逻辑 ---
+            # 智能撤退逻辑
             if len(self.ai_player.path_history) > 1:
                 self.ai_player.path_history.pop()  # 移除最后一个（墙）
                 prev_pos = self.ai_player.path_history[-1]  # 获取上一个位置
                 self.ai_player.x, self.ai_player.y = prev_pos  # 移动回上一个位置
-            # --- 新逻辑结束 ---
 
             self.ai_player.needs_new_target = True  # AI 玩家需要新目标
             self.game_state = STATE_GAMEPLAY  # 返回游戏进行中状态

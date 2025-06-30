@@ -42,7 +42,7 @@ def set_next_global_target(player, maze):
     player.needs_new_target = False
 
 def decide_move_greedy(player, maze):
-    """【最终稳健版】决策逻辑"""
+    """决策逻辑"""
     
     # 1. 如果需要新目标，则进行一次全局扫描
     if player.needs_new_target:
