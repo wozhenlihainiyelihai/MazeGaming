@@ -152,7 +152,7 @@ class Maze:
         """根据死胡同生成有宝藏和门的房间"""
         dead_ends = self._find_dead_ends(self.grid)
         potential = [p for p in dead_ends if p != self.start_pos and p != self.end_pos]
-        random.shuffle(potential)
+        random.shuffle(potential) #打乱顺序，随机
 
         # 控制数量（可微调）
         if self.size <= 7:
@@ -265,7 +265,7 @@ class Maze:
             output_filename = TEST_MAZE_FILENAME
             full_path = os.path.join(output_dir, output_filename)
         else:
-            # 如果提供了 filename，则使用它（例如，用于保存带有时间戳的唯一文件）
+            # 如果提供了 filename，则使用它
             output_dir = os.path.dirname(filename)
             if not output_dir: # 如果 filename 没有路径信息，则默认为当前目录
                 output_dir = "."
