@@ -55,3 +55,7 @@ SKILLS = {
 ATTACK_BOOST_AMOUNT = 5      # 每次提升所增加的攻击力
 GOLD_COST_FOR_BOOST = 15     # 提升攻击力所需消耗的金币
 HEALTH_COST_FOR_BOOST = 10   # 提升攻击力所需消耗的生命值
+
+# 用于保存生成迷宫的配置
+TEST_MAZE_DIR = "test_mazes" # 存放测试迷宫的文件夹名称
+TEST_MAZE_FILENAME = "current_test_maze.json" # 固定的测试迷宫文件名

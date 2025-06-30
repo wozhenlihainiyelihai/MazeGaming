@@ -64,6 +64,9 @@ class Game:
     def start_new_game(self, size=None, source_data=None):
         """开始新游戏，创建迷宫、Boss 和 AI 玩家，并计算 DP 路径"""
         self.maze = Maze(size=size, source_data=source_data)  # 创建迷宫
+         # 仅当迷宫是随机生成时才保存到固定测试文件
+        if size is not None and source_data is None:
+            self.maze.save_to_json() 
         self.boss = Boss()  # 创建 Boss
         self.dp_optimal_path, self.dp_max_score = calculate_dp_path(self.maze)  # 计算动态规划最优路径
         self.reset_simulation(ALGO_GREEDY)  # 重置模拟，默认使用贪婪算法
