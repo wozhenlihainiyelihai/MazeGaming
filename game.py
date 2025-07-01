@@ -122,20 +122,14 @@ class Game:
 
         self.game_state = STATE_BATTLE
         
-        # --- 这里的逻辑需要适配 ---
         boss_hp_list = self.battle_config['B']
         skills = self.battle_config['PlayerSkills']
         
-        # 关键适配：将整个列表赋值给 boss.health
-        # 这样 find_best_attack_sequence 就能接收到完整的Boss列表
         self.boss.health = boss_hp_list
         self.ai_player.skills = skills
 
-        # 调用核心算法
-        # player 和 boss 对象仅作为容器传递数据
         self.battle_result = find_best_attack_sequence(self.ai_player, self.boss, self.ai_player.skills)
         
-        # --- 终端打印结果 (保持不变) ---
         print("\n" + "="*40)
         print("BATTLE ANALYSIS COMPLETE")
         print("="*40)
@@ -148,13 +142,17 @@ class Game:
             print("  Outcome:         Victory is not possible!")
         print("="*40 + "\n")
 
-        # --- 更新游戏内的战斗日志 (保持不变) ---
         self.battle_log.clear()
         self.battle_log.append("Boss Gauntlet! Analyzing optimal strategy...")
         if self.battle_result and self.battle_result['turns'] != -1:
             self.battle_log.append(f"Optimal solution found! Minimum turns: {self.battle_result['turns']}.")
             self.battle_log.append("Skill Sequence (Dmg, CD):")
-            seq_str_ui = ' -> '.join([f"[{s[0]},{s[1]}]" for s in self.battle_result['sequence']])
+            
+            # --- THE FIX IS HERE ---
+            # 使用字典的键 'Damage' 和 'Cooldown' 来访问数据，而不是列表索引 [0] 和 [1]
+            seq_str_ui = ' -> '.join([f"[{s['Damage']},{s['Cooldown']}]" for s in self.battle_result['sequence']])
+            # --- END OF FIX ---
+
             max_len = 45
             if len(seq_str_ui) > max_len:
                 parts = [seq_str_ui[i:i+max_len] for i in range(0, len(seq_str_ui), max_len)]
@@ -166,7 +164,7 @@ class Game:
             self.battle_log.append("Analysis complete: Victory is not possible!")
 
         self.battle_end_timer = 0
-
+        
     def conclude_battle(self):
         """根据战斗结果更新游戏状态。"""
         if self.battle_result and self.battle_result['turns'] != -1:
