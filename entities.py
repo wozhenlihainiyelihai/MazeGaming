@@ -17,10 +17,11 @@ class Boss:
         self.max_health = BOSS_MAX_HEALTH # Boss 最大生命值
         self.health = self.max_health     # Boss 当前生命值
         self.attack = BOSS_ATTACK         # Boss 攻击力
-        self.is_frozen_for = 0            # Boss 被冻结的回合数
+        # 冻结状态在新逻辑中不再使用，但暂不移除
+        self.is_frozen_for = 0            
     
     def reset(self):
-        """重置 Boss 的生命值和冻结状态"""
+        """重置 Boss 的生命值"""
         self.health = self.max_health
         self.is_frozen_for = 0
 
@@ -31,21 +32,23 @@ class AIPlayer:
         self.color = (10, 10, 10)         # 玩家在屏幕上显示的颜色
         self.max_health = 100             # 玩家最大生命值
         self.health = 100                 # 玩家当前生命值
-        self.gold = 20                    # 玩家金币数量
-        self.attack = PLAYER_BASE_ATTACK  # 玩家基础攻击力
-        self.diamonds = 0                 # 玩家钻石数量
-        self.skills = set()               # 玩家已获得的技能集合
-        self.skill_cooldowns = {}         # 技能冷却时间 (当前未实现冷却机制)
-        self.start_pos = start_pos        # 玩家起始位置
-        self.boss_defeated = False        # Boss 是否已被击败的标志
-        self.is_active = True             # 玩家是否处于活跃状态
-        self.path_to_follow = []          # 在 DP 可视化模式下 AI 将遵循的预计算路径
-        self.temporary_target = None      # 玩家的临时目标（例如，捡起附近的金币）
-        self.attack_boost_this_turn = 0   # 本回合的攻击加成
-        self.path_history = deque(maxlen=5) # 玩家最近走过的路径历史，用于回溯等
-        # 状态旗帜，为True时表示AI需要一个新的全局目标
+        self.max_mana = 0                 # 玩家最大法力值
+        self.mana = 0                     # 玩家当前法力值
+        self.skills = []                  # 玩家技能列表, 将存储 [[伤害, 消耗], ...]
+        self.gold = 20
+        self.attack = PLAYER_BASE_ATTACK
+        self.diamonds = 0
+        self.skill_cooldowns = {}
+        self.attack_boost_this_turn = 0
+        self.start_pos = start_pos
+        self.boss_defeated = False
+        self.is_active = True
+        self.path_to_follow = []
+        self.temporary_target = None
+        self.path_history = deque(maxlen=5)
         self.needs_new_target = True
 
+    # ... AIPlayer 的其他方法 (decide_move, update, move, etc.) 保持不变 ...
     def decide_move(self, maze, algorithm):
         """
         根据当前选择的 AI 算法决定下一步的移动方向。
@@ -119,15 +122,8 @@ class AIPlayer:
             self.needs_new_target = True
 
         if tile.type == SHOP:
-            # 如果是商店瓦片
-            for skill_id, skill_data in SKILLS.items():
-                if skill_id not in self.skills and self.diamonds >= skill_data['cost']:
-                    # 玩家未拥有该技能且钻石足够，则购买技能
-                    self.diamonds -= skill_data['cost'] # 扣除钻石
-                    self.skills.add(skill_id)           # 添加技能
-                    tile.type = PATH                    # 商店瓦片变为路径
-                    self.needs_new_target = True        # 需要新目标
-                    break # 每次只购买一个技能
+            # 商店逻辑在新设定下不再有意义，可以注释或移除
+            pass
         elif tile.type == GOLD:
             # 如果是金币瓦片
             self.gold += GOLD_REWARD      # 增加金币

@@ -1,9 +1,13 @@
 import random
+import json
 from config import *
-from utils import bfs_path_avoiding_history # 从中立的 utils 导入
-from algorithms.branch_and_bound import analyze_battle_outcome
+from utils import bfs_path_avoiding_history
+from algorithms.branch_and_bound import find_best_attack_sequence
 
 def get_tile_value(tile_type, player, maze=None, pos=None):
+    """
+    Calculates the strategic value of a given tile for the greedy algorithm.
+    """
     if tile_type == GOLD: return GOLD_REWARD * SCORE_PER_GOLD
     if tile_type == HEALTH_POTION:
         if player.health >= 100: return 0
@@ -13,20 +17,47 @@ def get_tile_value(tile_type, player, maze=None, pos=None):
     if tile_type == SHOP:
         can_afford = any(skill not in player.skills and player.diamonds >= SKILLS[skill]['cost'] for skill in SKILLS)
         return 40 if can_afford else 0
+    
     if tile_type == BOSS:
-        if maze and hasattr(maze, 'boss'):
-            analysis = analyze_battle_outcome(player, maze.boss)
-            if analysis["survives"]:
-                return SCORE_BOSS_KILL - (analysis['health_lost'] * SCORE_PER_HEALTH) - analysis['turns']
-        return -1000
+        try:
+            with open('battle_config.json', 'r') as f:
+                config = json.load(f)
+
+            from entities import AIPlayer, Boss
+            
+            sim_player = AIPlayer()
+            sim_boss = Boss()
+
+            # --- THE FIX IS HERE ---
+            # We must explicitly assign the LIST of boss healths from the config
+            # to the simulated boss object's health attribute.
+            sim_boss.health = config['B']
+            # --- END OF FIX ---
+
+            skills = config['PlayerSkills']
+            
+            analysis = find_best_attack_sequence(sim_player, sim_boss, skills)
+
+            if analysis and analysis['turns'] != -1:
+                return SCORE_BOSS_KILL
+            else:
+                return -1000
+
+        except (FileNotFoundError, KeyError):
+            return -1000
+            
     return 0
 
 def set_next_global_target(player, maze):
-    """独立的全局扫描函数"""
+    """
+    Scans the entire map to find the most valuable long-term target.
+    """
     potential_targets = []
     history_set = set(player.path_history)
     for r in range(maze.size):
         for c in range(maze.size):
+            # We only evaluate the BOSS tile type here, the player object itself is just a placeholder
+            # for this specific calculation, as player health is infinite.
             value = get_tile_value(maze.grid[r][c].type, player, maze)
             if value > 0:
                 path = bfs_path_avoiding_history(start=(player.x, player.y), end=(c, r), maze_grid=maze.grid, history_path=history_set)
@@ -42,21 +73,19 @@ def set_next_global_target(player, maze):
     player.needs_new_target = False
 
 def decide_move_greedy(player, maze):
-    """决策逻辑"""
-    
-    # 1. 如果需要新目标，则进行一次全局扫描
+    """
+    The main decision-making logic for the greedy algorithm.
+    """
     if player.needs_new_target:
         set_next_global_target(player, maze)
 
     history_set = set(player.path_history)
     
-    # 2. 优先处理长期目标
     if player.temporary_target:
         path = bfs_path_avoiding_history(start=(player.x, player.y), end=player.temporary_target, maze_grid=maze.grid, history_path=history_set)
         if path and len(path) > 1:
             return (path[1][0] - player.x, path[1][1] - player.y)
 
-    # 3. 如果长期目标无法到达或不存在，则执行局部扫描寻找机会
     view_radius = 1
     local_targets = []
     for r_offset in range(-view_radius, view_radius + 1):
@@ -75,12 +104,10 @@ def decide_move_greedy(player, maze):
         if path and len(path) > 1:
             return (path[1][0] - player.x, path[1][1] - player.y)
 
-    # 4. 如果连局部机会都没有，则走向终点
     path_to_end = bfs_path_avoiding_history(start=(player.x, player.y), end=maze.end_pos, maze_grid=maze.grid, history_path=history_set)
     if path_to_end and len(path_to_end) > 1:
         return (path_to_end[1][0] - player.x, path_to_end[1][1] - player.y)
         
-    # 5. 如果被完全困住，允许回头
     if player.path_history and len(player.path_history) > 1:
         return (player.path_history[-2][0] - player.x, player.path_history[-2][1] - player.y)
 
