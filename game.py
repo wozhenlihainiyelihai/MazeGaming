@@ -4,14 +4,13 @@ import random
 import hashlib
 from collections import deque
 import json
-from config import * # 导入游戏配置，例如颜色、状态常量等
-from utils import SoundManager, create_all_icons  # 导入音效管理器和图标创建函数
-from maze import Maze  # 导入迷宫类
-from entities import AIPlayer, Boss  # 导入 AI 玩家和 Boss 实体类
-from algorithms.dynamic_programming import calculate_dp_path  # 导入动态规划寻路算法
-# find_best_attack_sequence 是我们的分支界限法入口
+from config import *
+from utils import SoundManager, create_all_icons
+from maze import Maze
+from entities import AIPlayer, Boss
+from algorithms.dynamic_programming import calculate_dp_path
 from algorithms.branch_and_bound import find_best_attack_sequence
-from algorithms.backtracking import solve_puzzle_by_method  # 导入回溯法解谜算法
+from algorithms.backtracking import solve_puzzle_by_method
 
 class Game:
     """游戏主类"""
@@ -26,17 +25,15 @@ class Game:
         self.maze, self.ai_player, self.boss = None, None, None
         self.ai_timer, self.ai_move_interval = 0, 100
         
-        # 战斗相关变量
         self.battle_config = None 
         self.battle_result = None 
         self.battle_end_timer = 0 
-        self.battle_display_duration = 5000 # 战斗结果显示 5 秒
+        self.battle_display_duration = 5000
 
         self.active_algorithm = ALGO_GREEDY
         self.dp_optimal_path, self.dp_max_score = [], 0
         self.battle_log = deque(maxlen=8) 
 
-        # 谜题相关变量
         self.puzzle_solver = None
         self.puzzle_timer = 0
         self.puzzle_update_interval = 100
@@ -56,6 +53,7 @@ class Game:
             self.font_vs = pygame.font.SysFont(font_name, 100, bold=True)
             self.font_result = pygame.font.SysFont(font_name, 120, bold=True)
         except pygame.error:
+            # Fallback to default font if specified font is not found
             self.font_title = pygame.font.SysFont(None, 80); self.font_button = pygame.font.SysFont(None, 50)
             self.font_info = pygame.font.SysFont(None, 32); self.font_info_bold = pygame.font.SysFont(None, 36, bold=True)
             self.font_legend = pygame.font.SysFont(None, 40); self.font_battle = pygame.font.SysFont(None, 24)
@@ -63,10 +61,10 @@ class Game:
             self.font_result = pygame.font.SysFont(None, 120, bold=True)
             
         self.buttons = {}
-        self.legend_icons = create_all_icons(50)
+        self.icons = create_all_icons(50)
 
     def load_battle_config(self, filepath='battle_config.json'):
-        """加载并存储战斗配置文件。"""
+        """加载Boss战配置文件。"""
         try:
             with open(filepath, 'r') as f:
                 self.battle_config = json.load(f)
@@ -79,14 +77,41 @@ class Game:
             self.battle_config = None
 
     def start_new_game(self, size=None, source_data=None):
-        """开始新游戏，创建所有实体。"""
-        self.maze = Maze(size=size, source_data=source_data)
+        """开始新游戏，创建所有实体并计算初始资源值。"""
+        self.maze = Maze(size=15, source_data=source_data) # 强制15x15
         if size is not None and source_data is None:
             self.maze.save_to_json() 
         self.boss = Boss()
         self.load_battle_config()
-        self.dp_optimal_path, self.dp_max_score = calculate_dp_path(self.maze)
+        
+        # 任务3: 动态规划寻路
+        self.dp_optimal_path, _ = calculate_dp_path(self.maze)
+        
         self.reset_simulation(ALGO_GREEDY)
+        
+        # --- 新增：计算初始资源值，满足验收要求(1) ---
+        resource_count = 0
+        trap_count = 0
+        # 遍历DP规划出的路径，统计资源和陷阱
+        if self.dp_optimal_path:
+            # 使用 set 来避免重复计算同一个格子上的资源
+            path_coords = set(tuple(p) for p in self.dp_optimal_path)
+            for x, y in path_coords:
+                tile_type = self.maze.pristine_grid[y][x].type
+                if tile_type in [LOCKER, GOLD, HEALTH_POTION, BOSS]:
+                    resource_count += 1
+                elif tile_type == TRAP:
+                    trap_count += 1
+        
+        initial_value = (resource_count * 50) + (trap_count * -30)
+        self.ai_player.resource_value = initial_value
+        
+        print("\n--- 任务3: 动态规划阶段 ---")
+        print(f"最优路径已规划，覆盖 {resource_count} 个资源和 {trap_count} 个陷阱。")
+        print(f"路径: {self.dp_optimal_path}")
+        print(f"初始资源值计算完成: {initial_value}")
+        print("---------------------------\n")
+
         self.game_state = STATE_GAMEPLAY
         self.sound_manager.play('coin')
     
@@ -114,11 +139,13 @@ class Game:
                 self.update_puzzle()
 
     def initiate_battle(self):
-        """初始化战斗，计算结果，并在UI和终端中显示。"""
+        """初始化战斗，计算结果并准备扣分。"""
         if not self.battle_config:
-            print("Cannot start battle: battle_config.json not loaded.")
-            self.game_state = STATE_GAMEPLAY
-            return
+            self.load_battle_config()
+            if not self.battle_config:
+                print("Cannot start battle: battle_config.json not found or invalid.")
+                self.game_state = STATE_GAMEPLAY
+                return
 
         self.game_state = STATE_BATTLE
         
@@ -130,51 +157,45 @@ class Game:
 
         self.battle_result = find_best_attack_sequence(self.ai_player, self.boss, self.ai_player.skills)
         
-        print("\n" + "="*40)
-        print("BATTLE ANALYSIS COMPLETE")
-        print("="*40)
+        # 终端打印
+        print("\n--- 任务5: Boss 战阶段 ---")
         if self.battle_result and self.battle_result['turns'] != -1:
-            print(f"  Outcome:         Optimal solution found!")
-            print(f"  Minimum Turns:   {self.battle_result['turns']}")
-            sequence_str = ' -> '.join(map(str, self.battle_result['sequence']))
-            print(f"  Optimal Sequence: {sequence_str}")
+            print(f"分析完成! 最优解需要 {self.battle_result['turns']} 回合。")
+            print(f"技能序列: {self.battle_result['sequence']}")
         else:
-            print("  Outcome:         Victory is not possible!")
-        print("="*40 + "\n")
-
+            print("分析完成! 未找到获胜序列。")
+        
+        # UI战斗日志
         self.battle_log.clear()
-        self.battle_log.append("Boss Gauntlet! Analyzing optimal strategy...")
+        self.battle_log.append("Boss Gauntlet! Analyzing...")
         if self.battle_result and self.battle_result['turns'] != -1:
-            self.battle_log.append(f"Optimal solution found! Minimum turns: {self.battle_result['turns']}.")
+            self.battle_log.append(f"Optimal solution: {self.battle_result['turns']} turns.")
             self.battle_log.append("Skill Sequence (Dmg, CD):")
-            
-            # --- THE FIX IS HERE ---
-            # 使用字典的键 'Damage' 和 'Cooldown' 来访问数据，而不是列表索引 [0] 和 [1]
             seq_str_ui = ' -> '.join([f"[{s['Damage']},{s['Cooldown']}]" for s in self.battle_result['sequence']])
-            # --- END OF FIX ---
-
             max_len = 45
             if len(seq_str_ui) > max_len:
                 parts = [seq_str_ui[i:i+max_len] for i in range(0, len(seq_str_ui), max_len)]
-                for part in parts:
-                   self.battle_log.append(part)
-            else:
-                self.battle_log.append(seq_str_ui)
-        else:
-            self.battle_log.append("Analysis complete: Victory is not possible!")
-
+                for part in parts: self.battle_log.append(part)
+            else: self.battle_log.append(seq_str_ui)
+        else: self.battle_log.append("Analysis complete: Victory is not possible!")
         self.battle_end_timer = 0
-        
+
     def conclude_battle(self):
-        """根据战斗结果更新游戏状态。"""
+        """根据战斗结果扣减资源值。"""
         if self.battle_result and self.battle_result['turns'] != -1:
             self.ai_player.boss_defeated = True
             self.maze.grid[self.ai_player.y][self.ai_player.x].type = PATH
             self.ai_player.needs_new_target = True
-            print("Boss has been defeated!")
+            
+            # --- 新增：根据回合数扣减资源值，满足验收要求(3) ---
+            deduction = self.battle_result['turns']
+            self.ai_player.resource_value -= deduction
+            print(f"Boss战胜利！扣除资源值: {deduction}。")
+            print(f"当前剩余资源值: {self.ai_player.resource_value}")
+            print("------------------------\n")
         else:
+            # 失败则不扣分，并重生
             self.ai_player.x, self.ai_player.y = self.ai_player.start_pos
-            self.ai_player.health = 100 
             print("AI was defeated and has respawned.")
 
         self.battle_result = None
@@ -184,19 +205,46 @@ class Game:
         """初始化解谜环节。"""
         self.game_state = STATE_PUZZLE
         salt = b'\xb2\x53\x22\x65\x7d\xdf\xb0\xfe\x9c\xde\xde\xfe\xf3\x1d\xdc\x3e'
-        puzzles = [
-            {"L": "81d5400ab2eca801a80837500be67485d0f8b297db1fa8ecbe4a23b66b65f6b8", "C": [[3,1],[-1,-1,5]], "length": 3, "salt": salt},
-            {"L": "78cc114968ab659cb55dabd23e31d30186cf6529d6e7529cdfadb5940d5be8e5", "C":[[-1,-1]], "length":3, "salt":salt},
-            {"L": "fd6c3f5085ea7aec0ea67683fd144303b0747091af782b246683811047e6dab8", "C": [[1,1], [-1,1,-1], [3,1]], "length": 3, "salt": salt}
-        ]
+        puzzles = [{"L": "81d5400ab2eca801a80837500be67485d0f8b297db1fa8ecbe4a23b66b65f6b8", "C": [[3,1],[-1,-1,5]], "length": 3, "salt": salt}]
         chosen_puzzle = random.choice(puzzles)
         self.puzzle_length = chosen_puzzle["length"]
         self.puzzle_clue_texts = self.generate_clue_texts(chosen_puzzle["C"], chosen_puzzle["length"])
         self.puzzle_target_hash = chosen_puzzle["L"]
-        self.puzzle_active_method = random.choice(["method1", "method2", "method3"])
+        self.puzzle_active_method = "method1" # 固定使用最优方法
         self.puzzle_solver = solve_puzzle_by_method(self.puzzle_active_method, chosen_puzzle["C"], self.puzzle_target_hash, self.puzzle_length, chosen_puzzle["salt"], {"count": 0})
-        self.puzzle_current_path, self.puzzle_status_text, self.puzzle_timer, self.puzzle_tries_count = [], "Initializing puzzle sequence...", 0, 0
+        self.puzzle_current_path, self.puzzle_status_text, self.puzzle_timer, self.puzzle_tries_count = [], "Initializing...", 0, 0
     
+    def update_puzzle(self):
+        """更新谜题求解进程并扣减资源值。"""
+        if not self.puzzle_solver: return
+        try:
+            self.puzzle_current_path, self.puzzle_status_text, self.puzzle_tries_count = next(self.puzzle_solver)
+            if "Success!" in self.puzzle_status_text:
+                self.draw_puzzle_screen(); self.draw_final_puzzle_result("SUCCESS", COLOR_HEALTH_PLAYER)
+                
+                # --- 新增：根据尝试次数扣减资源值，满足验收要求(2) ---
+                # 验收要求：每试错1次扣1个资源值。假设总尝试次数即为扣除值。
+                deduction = self.puzzle_tries_count
+                self.ai_player.resource_value -= deduction
+                print("\n--- 任务4: 解谜阶段 ---")
+                password = self.puzzle_status_text.split(": ")[-1]
+                print(f"密码破解成功！密码: {password}，尝试次数: {self.puzzle_tries_count}")
+                print(f"扣除资源值: {deduction}。当前剩余资源值: {self.ai_player.resource_value}")
+                print("-----------------------\n")
+                
+                # 清理并返回游戏
+                locker_tile = self.maze.grid[self.ai_player.y][self.ai_player.x]; locker_tile.type = PATH
+                self.ai_player.needs_new_target = True
+                self.game_state = STATE_GAMEPLAY; self.puzzle_solver = None; self.sound_manager.play('coin')
+        except StopIteration:
+            self.draw_puzzle_screen(); self.draw_final_puzzle_result("FAILURE", COLOR_HEALTH_BOSS)
+            # 失败逻辑
+            locker_tile = self.maze.grid[self.ai_player.y][self.ai_player.x]; locker_tile.type = WALL
+            if len(self.ai_player.path_history) > 1:
+                self.ai_player.path_history.pop(); prev_pos = self.ai_player.path_history[-1]
+                self.ai_player.x, self.ai_player.y = prev_pos
+            self.ai_player.needs_new_target = True; self.game_state = STATE_GAMEPLAY; self.puzzle_solver = None
+
     def run(self):
         """游戏主循环。"""
         while self.game_state != STATE_QUIT:
@@ -228,12 +276,9 @@ class Game:
             if button_name == 'continue': self.game_state = STATE_CHOOSE_MAZE_SOURCE
             elif button_name == 'back': self.game_state = STATE_MAIN_MENU
         elif self.game_state == STATE_CHOOSE_MAZE_SOURCE:
-            if button_name == 'generate': self.game_state = STATE_SELECT_MODE
+            if button_name == 'generate': self.start_new_game(size=15) # 直接生成15x15
             elif button_name == 'load_test': self.load_fixed_maze_and_start()
             elif button_name == 'back': self.game_state = STATE_INSTRUCTIONS
-        elif self.game_state == STATE_SELECT_MODE:
-            if 'x' in button_name: self.start_new_game(size=int(button_name.split('x')[0]))
-            elif button_name == 'back': self.game_state = STATE_CHOOSE_MAZE_SOURCE
         elif self.game_state == STATE_GAMEPLAY:
             if button_name == ALGO_GREEDY: self.reset_simulation(ALGO_GREEDY)
             elif button_name == ALGO_DP_VISUALIZATION: self.reset_simulation(ALGO_DP_VISUALIZATION)
@@ -251,16 +296,13 @@ class Game:
     def load_fixed_maze_and_start(self):
         """加载固定迷宫并开始。"""
         fixed_path = 'test_maze.json'
-        print(f"Attempting to load test maze from: {fixed_path}")
         try:
             with open(fixed_path, 'r') as f: data = json.load(f)
-            if 'maze' in data and isinstance(data['maze'], list): self.start_new_game(source_data=data['maze'])
-            else: print(f"Error: Format of '{fixed_path}' is incorrect.")
-        except FileNotFoundError: print(f"Error: Test file '{fixed_path}' not found.")
+            self.start_new_game(source_data=data['maze'])
         except Exception as e: print(f"Error loading fixed maze file: {e}")
 
     def generate_clue_texts(self, clues, length):
-        """Generates human-readable puzzle clues."""
+        """生成人类可读的谜题线索。"""
         texts = []
         has_uniqueness_clue = True
         for clue in clues:
@@ -275,32 +317,11 @@ class Game:
             elif len(clue) == length:
                 for i, digit in enumerate(clue):
                     if digit != -1:
-                        # This block is the corrected part.
-                        # First, get the correct ordinal string ("1st", "2nd", "5th", etc.)
                         pos_text = {1: "1st", 2: "2nd", 3: "3rd", 4: "4th"}.get(i + 1, f"{i + 1}th")
-                        # Then, create the final clue text.
                         texts.append(f"The {pos_text} digit is {digit}.")
         if has_uniqueness_clue:
             texts.append("Digits do not repeat.")
         return texts
-
-    def update_puzzle(self):
-        """更新谜题求解进程。"""
-        if not self.puzzle_solver: return
-        try:
-            self.puzzle_current_path, self.puzzle_status_text, self.puzzle_tries_count = next(self.puzzle_solver)
-            if "Success!" in self.puzzle_status_text:
-                self.draw_puzzle_screen(); self.draw_final_puzzle_result("SUCCESS", COLOR_HEALTH_PLAYER)
-                locker_tile = self.maze.grid[self.ai_player.y][self.ai_player.x]; locker_tile.type = PATH
-                self.ai_player.diamonds += PUZZLE_REWARD_DIAMONDS; self.ai_player.needs_new_target = True
-                self.game_state = STATE_GAMEPLAY; self.puzzle_solver = None; self.sound_manager.play('coin')
-        except StopIteration:
-            self.draw_puzzle_screen(); self.draw_final_puzzle_result("FAILURE", COLOR_HEALTH_BOSS)
-            locker_tile = self.maze.grid[self.ai_player.y][self.ai_player.x]; locker_tile.type = WALL
-            if len(self.ai_player.path_history) > 1:
-                self.ai_player.path_history.pop(); prev_pos = self.ai_player.path_history[-1]
-                self.ai_player.x, self.ai_player.y = prev_pos
-            self.ai_player.needs_new_target = True; self.game_state = STATE_GAMEPLAY; self.puzzle_solver = None
 
     def draw(self):
         """绘制所有游戏元素。"""
@@ -317,7 +338,6 @@ class Game:
             if self.game_state == STATE_MAIN_MENU: self.draw_main_menu()
             elif self.game_state == STATE_INSTRUCTIONS: self.draw_instructions()
             elif self.game_state == STATE_CHOOSE_MAZE_SOURCE: self.draw_choose_maze_source()
-            elif self.game_state == STATE_SELECT_MODE: self.draw_select_mode()
         pygame.display.flip()
     
     def draw_text_on_surface(self, surface, text, font, color, pos, centered=False):
@@ -350,12 +370,12 @@ class Game:
         """绘制说明和图例。"""
         self.buttons.clear(); self.screen.fill(COLOR_BG)
         self.draw_text("Legend", self.font_title, COLOR_BTN_SHADOW, (SCREEN_WIDTH / 2, 80), centered=True)
-        legend_items = { GOLD: "Gold", HEALTH_POTION: "Potion", TRAP: "Trap", LOCKER: "Locker", SHOP: "Shop", BOSS: "Boss"}
+        legend_items = { GOLD: "Gold", HEALTH_POTION: "Potion", TRAP: "Trap", LOCKER: "Locker", BOSS: "Boss"}
         item_height, gap, start_y = 50, 25, (SCREEN_HEIGHT - (len(legend_items) * (50 + 25) - 25)) / 2
         x_icon, x_text = SCREEN_WIDTH / 2 - 150, SCREEN_WIDTH / 2 - 80
         for i, (item_type, text) in enumerate(legend_items.items()):
             y_pos = start_y + i * (item_height + gap)
-            if self.legend_icons.get(item_type): self.screen.blit(self.legend_icons.get(item_type), (x_icon, y_pos))
+            if self.icons.get(item_type): self.screen.blit(self.icons.get(item_type), (x_icon, y_pos))
             self.draw_text(text, self.font_legend, COLOR_HUD_BG, (x_text, y_pos + 5))
         self.draw_button('continue', 'Continue', (SCREEN_WIDTH / 2, SCREEN_HEIGHT - 100), (220, 70))
         self.draw_button('back', 'Back', (100, 50), (150, 60))
@@ -364,18 +384,8 @@ class Game:
         """绘制迷宫来源选择界面。"""
         self.buttons.clear(); self.screen.fill(COLOR_BG)
         self.draw_text("Choose Maze Source", self.font_title, COLOR_BTN_SHADOW, (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 4), centered=True)
-        self.draw_button('generate', 'Generate Random Maze', (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 50), (450, 75))
+        self.draw_button('generate', 'Generate 15x15 Maze', (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 50), (450, 75))
         self.draw_button('load_test', 'Load Test Maze', (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 50), (450, 75))
-        self.draw_button('back', 'Back', (100, 50), (150, 60))
-
-    def draw_select_mode(self):
-        """绘制迷宫尺寸选择界面。"""
-        self.buttons.clear(); self.screen.fill(COLOR_BG)
-        self.draw_text("Select Maze Size", self.font_title, COLOR_BTN_SHADOW, (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 5), centered=True)
-        btn_w, btn_h = 220, 70
-        self.draw_button('7x7', '7 x 7', (SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.40), (btn_w, btn_h))
-        self.draw_button('15x15', '15 x 15', (SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.55), (btn_w, btn_h))
-        self.draw_button('31x31', '31 x 31', (SCREEN_WIDTH / 2, SCREEN_HEIGHT * 0.70), (btn_w, btn_h))
         self.draw_button('back', 'Back', (100, 50), (150, 60))
         
     def draw_info_panel(self):
@@ -386,13 +396,8 @@ class Game:
         self.draw_text("AI STATUS", self.font_button, COLOR_BTN_HOVER, title_pos, centered=True)
         if self.ai_player:
             y_offset = 120
-            stats = {"Health": f"{self.ai_player.health}/{self.ai_player.max_health}"}
-            if self.game_state == STATE_BATTLE:
-                stats["Mana"] = f"{self.ai_player.mana}/{self.ai_player.max_mana}"
-            else:
-                stats["Gold"] = f"{self.ai_player.gold}"
-                stats["Diamonds"] = f"{self.ai_player.diamonds}"
-
+            # 简化信息面板，只显示最重要的资源值
+            stats = {"Resource": f"{self.ai_player.resource_value}"}
             for stat, value in stats.items():
                 self.draw_text(f"{stat}:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset))
                 self.draw_text(value, self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + 180, y_offset))
@@ -410,7 +415,7 @@ class Game:
         self.draw_button('main_menu', 'Menu', (INFO_PANEL_X + INFO_PANEL_WIDTH/2, SCREEN_HEIGHT - 60), (220, 60))
 
     def draw_battle_screen(self):
-        """绘制战斗结果展示界面。"""
+        """重构后的战斗界面，以展示车轮战进度。"""
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
         popup_width, popup_height = 800, 500
         popup_x, popup_y = (SCREEN_WIDTH - popup_width) / 2, (SCREEN_HEIGHT - popup_height) / 2
@@ -418,22 +423,26 @@ class Game:
         pygame.draw.rect(overlay, COLOR_POPUP_BG, popup_rect, border_radius=20)
         pygame.draw.rect(overlay, COLOR_GRID, popup_rect, 4, border_radius=20)
 
-        player_x = popup_x + 180
-        self.draw_text_on_surface(overlay, "AI PLAYER", self.font_button, COLOR_TEXT, (player_x, popup_y + 60), centered=True)
-        player_stats_y = popup_y + 120
-        self.draw_text_on_surface(overlay, f"Health: {self.ai_player.max_health}", self.font_info, COLOR_TEXT, (player_x - 120, player_stats_y))
-        self.draw_text_on_surface(overlay, f"Mana: {self.ai_player.max_mana}", self.font_info, COLOR_TEXT, (player_x - 120, player_stats_y + 40))
-        
-        boss_x = popup_x + popup_width - 180
-        self.draw_text_on_surface(overlay, "THE BOSS", self.font_button, COLOR_TEXT, (boss_x, popup_y + 60), centered=True)
-        boss_stats_y = popup_y + 120
-        self.draw_text_on_surface(overlay, f"Health: {self.boss.max_health}", self.font_info, COLOR_TEXT, (boss_x - 120, boss_stats_y))
-        self.draw_text_on_surface(overlay, f"Attack: {self.boss.attack}", self.font_info, COLOR_TEXT, (boss_x - 120, boss_stats_y + 40))
-        
-        log_bg_rect = pygame.Rect(popup_x + 50, popup_y + 220, popup_width - 100, 250)
+        self.draw_text_on_surface(overlay, "Boss Gauntlet", self.font_title, COLOR_TEXT, (popup_x + popup_width / 2, popup_y + 60), centered=True)
+
+        if isinstance(self.boss.health, list):
+            total_bosses = len(self.boss.health)
+            defeated_bosses = 0
+            if self.battle_result and self.battle_result['sequence']:
+                temp_hp = list(self.boss.health)
+                for skill in self.battle_result['sequence']:
+                    if defeated_bosses < len(temp_hp):
+                        temp_hp[defeated_bosses] -= skill['Damage']
+                        if temp_hp[defeated_bosses] <= 0:
+                            defeated_bosses += 1
+            
+            progress_text = f"Progress: Boss {min(defeated_bosses + 1, total_bosses)} / {total_bosses}"
+            self.draw_text_on_surface(overlay, progress_text, self.font_button, COLOR_SUBTEXT, (popup_x + popup_width / 2, popup_y + 130), centered=True)
+
+        log_bg_rect = pygame.Rect(popup_x + 50, popup_y + 180, popup_width - 100, 290)
         pygame.draw.rect(overlay, COLOR_BATTLE_LOG_BG, log_bg_rect, border_radius=10)
         
-        y_offset = popup_y + 240
+        y_offset = popup_y + 200
         for log_entry in self.battle_log:
             self.draw_text_on_surface(overlay, log_entry, self.font_battle, COLOR_TEXT, (popup_x + 70, y_offset))
             y_offset += 28
