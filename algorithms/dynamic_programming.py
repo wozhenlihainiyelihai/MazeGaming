@@ -3,6 +3,14 @@ import numpy as np
 import heapq
 from collections import defaultdict
 
+# --- 新增：为动态规划（路径规划）设定预估成本 ---
+# 任务书中提到，Boss战和解谜宝箱会消耗资源值。
+# 为了让DP算法在规划最优路径时能考虑到这些未来的"成本"，我们在此处定义预估值。
+# DP算法将使用这些成本来调整对Boss和宝箱的"价值"评估，从而规划出更真实的全局最优路径。
+# 例如，如果Boss战成本很高，DP可能会选择一条能收集更多血瓶或金币的路径去打Boss。
+ESTIMATED_BOSS_COST_IN_TURNS = 10  # 预估Boss战需要的回合数 (对应资源值扣减)
+ESTIMATED_PUZZLE_COST_IN_TRIES = 30 # 预估解谜的尝试次数 (对应资源值扣减)
+
 
 def _run_a_star_phase(maze, start_pos, end_pos, resources, initial_context):
     """
@@ -38,14 +46,14 @@ def _run_a_star_phase(maze, start_pos, end_pos, resources, initial_context):
     # 动态奖励计算函数
     # 根据玩家当前状态（生命、金币）和资源类型，计算获取该资源能获得的奖励分数
     def calculate_reward(res_type, health, gold):
-        if res_type == GOLD: return 150
-        # 开锁奖励
-        if res_type == LOCKER: return 100
-        # 生命值低于80时，血瓶价值更高
+        if res_type == GOLD: return 300
+        # 修改：宝箱的奖励值需要减去预估的解谜成本
+        if res_type == LOCKER: return 100 - ESTIMATED_PUZZLE_COST_IN_TRIES
         if res_type == HEALTH_POTION: return (110-health)*4
-        if res_type == TRAP: return -200
+        if res_type == TRAP: return -20
+        # 修改：挑战Boss的奖励值需要减去预估的战斗回合成本
         # 挑战Boss需要生命值高于30，否则视为无法通行的路径
-        if res_type == BOSS: return 600 if health > 30 else -float('inf')
+        if res_type == BOSS: return 600 - ESTIMATED_BOSS_COST_IN_TURNS if health > 30 else -float('inf')
         return 0
 
     # 初始化A*搜索的起点
@@ -111,13 +119,9 @@ def _run_a_star_phase(maze, start_pos, end_pos, resources, initial_context):
                         else:
                             temp_health -= TRAP_HEALTH_COST
                     elif res_type == GOLD:
-                        temp_gold += 100
+                        temp_gold += 10
                     elif res_type == HEALTH_POTION:
                         temp_health = min(100, temp_health + 20)
-                    # elif res_type == BOSS:
-                    #     temp_health -= 30
-                    # elif res_type == LOCKER:
-                    #     temp_gold -= 10  # 开启LOCKER需要消耗10金币
 
                     # 只有在交互后生命值大于0的情况下，才认为此次交互有效
                     if temp_health > 0:
@@ -193,7 +197,7 @@ def calculate_dp_path(maze):
         quotas = {HEALTH_POTION: 3, GOLD: 2}
     elif maze.size == 15:
         # 15x15地图: 共选择10个资源 (5血瓶, 5金币)
-        quotas = {HEALTH_POTION: 5, GOLD: 5}
+        quotas = {HEALTH_POTION: 5, GOLD: 20}
     elif maze.size == 31:
         # 31x31地图: 共选择24个资源 (12血瓶, 12金币)
         quotas = {HEALTH_POTION: 12, GOLD: 12}
@@ -208,10 +212,12 @@ def calculate_dp_path(maze):
 
     for res_type in sorted_types:
         quota = quotas[res_type]
-        # 按离起点的距离（曼哈顿距离）对该类型资源进行排序，优先选择近的
+        # 优化资源筛选逻辑：优先选择"顺路"的资源
+        # 即离起点和Boss点路径总距离更近的资源
         candidates = sorted(
             resources_by_type[res_type],
-            key=lambda r: abs(r[0] - maze.start_pos[0]) + abs(r[1] - maze.start_pos[1])
+            key=lambda r: (abs(r[0] - maze.start_pos[0]) + abs(r[1] - maze.start_pos[1])) + 
+                          (abs(r[0] - boss_pos[0]) + abs(r[1] - boss_pos[1]))
         )
         # 将满足配额的资源加入最终列表
         resources_p1.extend(candidates[:quota])
