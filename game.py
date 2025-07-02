@@ -11,6 +11,8 @@ from entities import AIPlayer, Boss
 from algorithms.dynamic_programming import calculate_dp_path
 from algorithms.branch_and_bound import find_best_attack_sequence
 from algorithms.backtracking import solve_puzzle_by_method
+# --- 新增：导入贪心算法的价值评估函数 ---
+from algorithms.greedy import get_tile_value
 
 class Game:
     """游戏主类"""
@@ -23,7 +25,7 @@ class Game:
         self.sound_manager = SoundManager()
         
         self.maze, self.ai_player, self.boss = None, None, None
-        self.ai_timer, self.ai_move_interval = 0, 100
+        self.ai_timer, self.ai_move_interval = 100, 100 # 调整初始计时器
         
         self.battle_config = None 
         self.battle_result = None 
@@ -53,7 +55,6 @@ class Game:
             self.font_vs = pygame.font.SysFont(font_name, 100, bold=True)
             self.font_result = pygame.font.SysFont(font_name, 120, bold=True)
         except pygame.error:
-            # Fallback to default font if specified font is not found
             self.font_title = pygame.font.SysFont(None, 80); self.font_button = pygame.font.SysFont(None, 50)
             self.font_info = pygame.font.SysFont(None, 32); self.font_info_bold = pygame.font.SysFont(None, 36, bold=True)
             self.font_legend = pygame.font.SysFont(None, 40); self.font_battle = pygame.font.SysFont(None, 24)
@@ -78,23 +79,19 @@ class Game:
 
     def start_new_game(self, size=None, source_data=None):
         """开始新游戏，创建所有实体并计算初始资源值。"""
-        self.maze = Maze(size=15, source_data=source_data) # 强制15x15
+        self.maze = Maze(size=15, source_data=source_data)
         if size is not None and source_data is None:
             self.maze.save_to_json() 
         self.boss = Boss()
         self.load_battle_config()
         
-        # 任务3: 动态规划寻路
         self.dp_optimal_path, _ = calculate_dp_path(self.maze)
         
         self.reset_simulation(ALGO_GREEDY)
         
-        # --- 新增：计算初始资源值，满足验收要求(1) ---
         resource_count = 0
         trap_count = 0
-        # 遍历DP规划出的路径，统计资源和陷阱
         if self.dp_optimal_path:
-            # 使用 set 来避免重复计算同一个格子上的资源
             path_coords = set(tuple(p) for p in self.dp_optimal_path)
             for x, y in path_coords:
                 tile_type = self.maze.pristine_grid[y][x].type
@@ -122,6 +119,24 @@ class Game:
             if self.ai_timer >= self.ai_move_interval:
                 self.ai_timer = 0
                 interaction_result = self.ai_player.update(self.maze, self.sound_manager, self.active_algorithm)
+                
+                # --- 新增：处理贪心算法的计分逻辑 ---
+                if self.active_algorithm == ALGO_GREEDY:
+                    if isinstance(interaction_result, int): # 检查返回的是否为地块类型常量
+                        # 陷阱的价值本身是负数，所以直接相加即可
+                        value_change = get_tile_value(interaction_result, self.ai_player)
+                        self.ai_player.greedy_score += value_change
+                        
+                        # 如果到达终点，则输出贪心算法的结果
+                        if interaction_result == END:
+                            print("\n--- 贪心算法执行完毕 ---")
+                            # 移除重复的坐标点，使路径更清晰
+                            unique_path = list(dict.fromkeys(self.ai_player.greedy_path))
+                            print(f"  资源拾取路径: {unique_path}")
+                            print(f"  最终资源得分: {self.ai_player.greedy_score}")
+                            print("--------------------------\n")
+                            self.ai_player.is_active = False # 停止AI
+                
                 if interaction_result == 'start_battle':
                     self.initiate_battle()
                 elif interaction_result == 'start_puzzle':
@@ -157,7 +172,6 @@ class Game:
 
         self.battle_result = find_best_attack_sequence(self.ai_player, self.boss, self.ai_player.skills)
         
-        # 终端打印
         print("\n--- 任务5: Boss 战阶段 ---")
         if self.battle_result and self.battle_result['turns'] != -1:
             print(f"分析完成! 最优解需要 {self.battle_result['turns']} 回合。")
@@ -165,7 +179,6 @@ class Game:
         else:
             print("分析完成! 未找到获胜序列。")
         
-        # UI战斗日志
         self.battle_log.clear()
         self.battle_log.append("Boss Gauntlet! Analyzing...")
         if self.battle_result and self.battle_result['turns'] != -1:
@@ -187,14 +200,16 @@ class Game:
             self.maze.grid[self.ai_player.y][self.ai_player.x].type = PATH
             self.ai_player.needs_new_target = True
             
-            # --- 新增：根据回合数扣减资源值，满足验收要求(3) ---
             deduction = self.battle_result['turns']
             self.ai_player.resource_value -= deduction
             print(f"Boss战胜利！扣除资源值: {deduction}。")
             print(f"当前剩余资源值: {self.ai_player.resource_value}")
             print("------------------------\n")
+            
+            # 贪心算法计分
+            if self.active_algorithm == ALGO_GREEDY:
+                self.ai_player.greedy_score += get_tile_value(BOSS, self.ai_player)
         else:
-            # 失败则不扣分，并重生
             self.ai_player.x, self.ai_player.y = self.ai_player.start_pos
             print("AI was defeated and has respawned.")
 
@@ -210,7 +225,7 @@ class Game:
         self.puzzle_length = chosen_puzzle["length"]
         self.puzzle_clue_texts = self.generate_clue_texts(chosen_puzzle["C"], chosen_puzzle["length"])
         self.puzzle_target_hash = chosen_puzzle["L"]
-        self.puzzle_active_method = "method1" # 固定使用最优方法
+        self.puzzle_active_method = "method1"
         self.puzzle_solver = solve_puzzle_by_method(self.puzzle_active_method, chosen_puzzle["C"], self.puzzle_target_hash, self.puzzle_length, chosen_puzzle["salt"], {"count": 0})
         self.puzzle_current_path, self.puzzle_status_text, self.puzzle_timer, self.puzzle_tries_count = [], "Initializing...", 0, 0
     
@@ -222,8 +237,6 @@ class Game:
             if "Success!" in self.puzzle_status_text:
                 self.draw_puzzle_screen(); self.draw_final_puzzle_result("SUCCESS", COLOR_HEALTH_PLAYER)
                 
-                # --- 新增：根据尝试次数扣减资源值，满足验收要求(2) ---
-                # 验收要求：每试错1次扣1个资源值。假设总尝试次数即为扣除值。
                 deduction = self.puzzle_tries_count
                 self.ai_player.resource_value -= deduction
                 print("\n--- 任务4: 解谜阶段 ---")
@@ -232,13 +245,15 @@ class Game:
                 print(f"扣除资源值: {deduction}。当前剩余资源值: {self.ai_player.resource_value}")
                 print("-----------------------\n")
                 
-                # 清理并返回游戏
+                # 为贪心算法计分
+                if self.active_algorithm == ALGO_GREEDY:
+                    self.ai_player.greedy_score += get_tile_value(LOCKER, self.ai_player)
+                
                 locker_tile = self.maze.grid[self.ai_player.y][self.ai_player.x]; locker_tile.type = PATH
                 self.ai_player.needs_new_target = True
                 self.game_state = STATE_GAMEPLAY; self.puzzle_solver = None; self.sound_manager.play('coin')
         except StopIteration:
             self.draw_puzzle_screen(); self.draw_final_puzzle_result("FAILURE", COLOR_HEALTH_BOSS)
-            # 失败逻辑
             locker_tile = self.maze.grid[self.ai_player.y][self.ai_player.x]; locker_tile.type = WALL
             if len(self.ai_player.path_history) > 1:
                 self.ai_player.path_history.pop(); prev_pos = self.ai_player.path_history[-1]
@@ -276,7 +291,7 @@ class Game:
             if button_name == 'continue': self.game_state = STATE_CHOOSE_MAZE_SOURCE
             elif button_name == 'back': self.game_state = STATE_MAIN_MENU
         elif self.game_state == STATE_CHOOSE_MAZE_SOURCE:
-            if button_name == 'generate': self.start_new_game(size=15) # 直接生成15x15
+            if button_name == 'generate': self.start_new_game(size=15)
             elif button_name == 'load_test': self.load_fixed_maze_and_start()
             elif button_name == 'back': self.game_state = STATE_INSTRUCTIONS
         elif self.game_state == STATE_GAMEPLAY:
@@ -292,6 +307,10 @@ class Game:
         self.ai_player = AIPlayer(start_pos=self.maze.start_pos)
         if self.active_algorithm == ALGO_DP_VISUALIZATION:
             self.ai_player.path_to_follow = list(self.dp_optimal_path)
+        # 重置贪心算法的分数和路径
+        self.ai_player.greedy_score = 0
+        self.ai_player.greedy_path = [self.ai_player.start_pos]
+
 
     def load_fixed_maze_and_start(self):
         """加载固定迷宫并开始。"""
@@ -396,8 +415,12 @@ class Game:
         self.draw_text("AI STATUS", self.font_button, COLOR_BTN_HOVER, title_pos, centered=True)
         if self.ai_player:
             y_offset = 120
-            # 简化信息面板，只显示最重要的资源值
-            stats = {"Resource": f"{self.ai_player.resource_value}"}
+            # 根据当前运行的算法，显示不同的分数
+            if self.active_algorithm == ALGO_GREEDY:
+                stats = {"G-Score": f"{self.ai_player.greedy_score}"}
+            else:
+                stats = {"Resource": f"{self.ai_player.resource_value}"}
+            
             for stat, value in stats.items():
                 self.draw_text(f"{stat}:", self.font_info_bold, COLOR_TEXT, (INFO_PANEL_X + 25, y_offset))
                 self.draw_text(value, self.font_info, COLOR_SUBTEXT, (INFO_PANEL_X + 180, y_offset))
