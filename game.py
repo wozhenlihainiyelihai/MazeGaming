@@ -26,7 +26,7 @@ class Game:
         self.sound_manager = SoundManager()
 
         self.maze, self.ai_player, self.boss = None, None, None
-        self.ai_timer, self.ai_move_interval = 100, 100  
+        self.ai_timer, self.ai_move_interval = 100, 100  # 调整初始计时器
 
         self.battle_config = None
         self.battle_result = None
@@ -102,12 +102,12 @@ class Game:
             path_coords = set(tuple(p) for p in self.dp_optimal_path)
             for x, y in path_coords:
                 tile_type = self.maze.pristine_grid[y][x].type
-                if tile_type in [LOCKER, GOLD, HEALTH_POTION, BOSS]:
+                if tile_type in [LOCKER, GOLD, BOSS]:
                     resource_count += 1
                 elif tile_type == TRAP:
                     trap_count += 1
 
-        initial_value = (resource_count * 50) + (trap_count * (-30))
+        initial_value = (resource_count * 50) + (trap_count * -30)
         self.ai_player.resource_value = initial_value
 
         print("\n--- 任务3: 动态规划阶段 ---")
@@ -167,17 +167,15 @@ class Game:
 
     def initiate_battle(self):
         """初始化战斗，计算结果并准备扣分。"""
-        if not self.battle_config:
-            self.load_battle_config()
-            if not self.battle_config:
-                print("Cannot start battle: battle_config.json not found or invalid.")
-                self.game_state = STATE_GAMEPLAY
-                return
-
         self.game_state = STATE_BATTLE
 
-        boss_hp_list = self.battle_config['B']
-        skills = self.battle_config['PlayerSkills']
+        boss_hp_list = [11, 13, 9, 15]
+        skills = [
+            {"Damage": 8, "Cooldown": 4},
+            {"Damage": 2, "Cooldown": 0},
+            {"Damage": 4, "Cooldown": 2},
+            {"Damage": 6, "Cooldown": 3}
+        ]
 
         self.boss.health = boss_hp_list
         self.ai_player.skills = skills
@@ -215,14 +213,13 @@ class Game:
             self.ai_player.needs_new_target = True
 
             deduction = self.battle_result['turns']
+            # DP分数的扣减
             self.ai_player.resource_value -= deduction
             print(f"Boss战胜利！扣除资源值: {deduction}。")
             print(f"当前剩余资源值: {self.ai_player.resource_value}")
             print("------------------------\n")
-
-            # 贪心算法计分
             if self.active_algorithm == ALGO_GREEDY:
-                self.ai_player.greedy_score += get_tile_value(BOSS, self.ai_player)
+                self.ai_player.greedy_score -= deduction
         else:
             self.ai_player.x, self.ai_player.y = self.ai_player.start_pos
             print("AI was defeated and has respawned.")
@@ -256,6 +253,7 @@ class Game:
                 self.draw_final_puzzle_result("SUCCESS", COLOR_HEALTH_PLAYER)
 
                 deduction = self.puzzle_tries_count
+                # DP分数的扣减
                 self.ai_player.resource_value -= deduction
                 print("\n--- 任务4: 解谜阶段 ---")
                 password = self.puzzle_status_text.split(": ")[-1]
@@ -263,9 +261,8 @@ class Game:
                 print(f"扣除资源值: {deduction}。当前剩余资源值: {self.ai_player.resource_value}")
                 print("-----------------------\n")
 
-                # 为贪心算法计分
                 if self.active_algorithm == ALGO_GREEDY:
-                    self.ai_player.greedy_score += get_tile_value(LOCKER, self.ai_player)
+                    self.ai_player.greedy_score -= deduction
 
                 locker_tile = self.maze.grid[self.ai_player.y][self.ai_player.x];
                 locker_tile.type = PATH
@@ -438,7 +435,7 @@ class Game:
         self.buttons.clear();
         self.screen.fill(COLOR_BG)
         self.draw_text("Legend", self.font_title, COLOR_BTN_SHADOW, (SCREEN_WIDTH / 2, 80), centered=True)
-        legend_items = {GOLD: "Gold", HEALTH_POTION: "Potion", TRAP: "Trap", LOCKER: "Locker", BOSS: "Boss"}
+        legend_items = {GOLD: "Gold", TRAP: "Trap", LOCKER: "Locker", BOSS: "Boss"}
         item_height, gap, start_y = 50, 25, (SCREEN_HEIGHT - (len(legend_items) * (50 + 25) - 25)) / 2
         x_icon, x_text = SCREEN_WIDTH / 2 - 150, SCREEN_WIDTH / 2 - 80
         for i, (item_type, text) in enumerate(legend_items.items()):
@@ -574,46 +571,3 @@ class Game:
         self.draw_text_on_surface(overlay, self.puzzle_status_text, self.font_info_bold, COLOR_SUBTEXT,
                                   (SCREEN_WIDTH / 2, y_pos + 150), centered=True)
         self.screen.blit(overlay, (0, 0))
-
-    def update(self, maze, sound_manager, algorithm):
-        if not self.ai_player.is_active: return None
-        dx, dy = self.ai_player.decide_move(maze, algorithm)
-        if self.ai_player.move(dx, dy, maze):
-            # 移动成功后，与地块交互
-            interaction_result = self.interact_with_tile(maze, sound_manager)
-            # 更新D-score
-            if algorithm == ALGO_DP_VISUALIZATION:
-                if interaction_result == GOLD:
-                    self.ai_player.resource_value += 50
-                elif interaction_result == TRAP:
-                    self.ai_player.resource_value -= 30
-            return interaction_result
-        return None
-
-    def interact_with_tile(self, maze, sound_manager):
-        tile = maze.grid[self.ai_player.y][self.ai_player.x]
-
-        if (self.ai_player.x, self.ai_player.y) == self.ai_player.temporary_target:
-            self.ai_player.temporary_target = None
-            self.ai_player.needs_new_target = True
-
-        # 返回地块类型用于计分
-        interacted_tile_type = tile.type
-
-        if tile.type == GOLD:
-            sound_manager.play('coin')
-            tile.type = PATH
-            self.ai_player.needs_new_target = True
-            return interacted_tile_type
-        elif tile.type == TRAP:
-            sound_manager.play('trap')
-            tile.type = PATH
-            return interacted_tile_type
-        elif tile.type == LOCKER:
-            return 'start_puzzle'
-        elif tile.type == BOSS and not self.ai_player.boss_defeated:
-            return 'start_battle'
-        elif tile.type == END:
-            return interacted_tile_type
-
-        return None

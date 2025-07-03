@@ -43,8 +43,8 @@ def create_all_icons(icon_size):
     if icon_size <= 0: return tile_icons
     
     icon_colors = {
-        'BOSS': (139, 0, 0), 'GOLD': (255, 215, 0), 'HEALTH_POTION': (255, 105, 180),
-        'TRAP': (70, 130, 180), 'SHOP': (34, 139, 34), 'LOCKER': (150, 75, 0)
+        'BOSS': (139, 0, 0), 'GOLD': (255, 215, 0),
+        'TRAP': (70, 130, 180), 'LOCKER': (150, 75, 0)
     }
     font_color = (0,0,0)
 
@@ -57,12 +57,6 @@ def create_all_icons(icon_size):
     surf.blit(text, rect)
     tile_icons[GOLD] = surf
     
-    # Health Potion
-    surf = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
-    pygame.draw.rect(surf, icon_colors['HEALTH_POTION'], (icon_size // 4, 0, icon_size // 2, icon_size))
-    pygame.draw.rect(surf, icon_colors['HEALTH_POTION'], (0, icon_size // 4, icon_size, icon_size // 2))
-    tile_icons[HEALTH_POTION] = surf
-    
     # Trap
     surf = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
     pygame.draw.line(surf, icon_colors['TRAP'], (0, 0), (icon_size, icon_size), 3)
@@ -74,14 +68,6 @@ def create_all_icons(icon_size):
     pygame.draw.circle(surf, icon_colors['LOCKER'], (icon_size // 2, icon_size // 3), icon_size // 4)
     pygame.draw.rect(surf, icon_colors['LOCKER'], (icon_size // 2 - 2, icon_size // 3, 4, icon_size // 2))
     tile_icons[LOCKER] = surf
-    
-    # Shop
-    surf = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
-    pygame.draw.rect(surf, icon_colors['SHOP'], (0, 0, icon_size, icon_size // 4))
-    pygame.draw.rect(surf, icon_colors['SHOP'], (icon_size // 8, icon_size // 4, icon_size * 6 // 8, icon_size * 3 // 4), 2)
-    pygame.draw.circle(surf, icon_colors['SHOP'], (icon_size // 4, icon_size), 3)
-    pygame.draw.circle(surf, icon_colors['SHOP'], (icon_size * 3 // 4, icon_size), 3)
-    tile_icons[SHOP] = surf
     
     # Boss
     surf = pygame.Surface((icon_size, icon_size), pygame.SRCALPHA)
@@ -125,4 +111,3 @@ def bfs_path_avoiding_history(start, end, maze_grid, history_path=set()):
             queue.append(new_path)
     
     return None
-

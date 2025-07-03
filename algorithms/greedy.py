@@ -4,28 +4,23 @@ from utils import bfs_path_avoiding_history
 
 def get_tile_value(tile_type, player):
     """
-    为贪心算法计算给定地块的战略价值（轻量级高性能版本）。
+    为贪心算法计算给定地块的战略价值。
+    此函数现在直接反映最终的资源得分规则。
     """
     if tile_type == GOLD:
-        # 金币的基础价值现在相对更高，以确保其吸引力
-        return 50
-    if tile_type == HEALTH_POTION:
-        # 药水的价值与玩家损失的生命值成正比
-        if player.health >= player.max_health:
-            return 0
-        return (POTION_HEAL_AMOUNT * SCORE_PER_HEALTH) + (player.max_health - player.health)
-    if tile_type == LOCKER:
-        return SCORE_LOCKER_UNLOCK
+        return 50  # 金币直接增加50资源值
     if tile_type == TRAP:
-        return -30
-    if tile_type == SHOP:
-        return 40
+        return -30 # 陷阱直接扣除30资源值
+    
+    # 对于没有直接资源值的目标，给予一个正向启发值，激励AI探索
+    if tile_type == LOCKER:
+        return 100 # 启发值，代表这是一个有价值的目标
     if tile_type == BOSS:
-        # AI只会在自身生命值较高时，才将Boss视为有价值的目标
-        if player.health > 70:
-            return SCORE_BOSS_KILL
+        if player.health > 70: # 只有在状态良好时才考虑Boss
+            return 100 # 启发值，代表这是一个有价值的目标
         else:
-            return -1000  # 给予巨大负分，让AI主动避开
+            return -1000  # 状态不好时，给予巨大负分以避开
+            
     return 0
 
 # --- 核心决策逻辑：严格遵守“视野受限”原则 ---
@@ -35,7 +30,7 @@ def decide_move_greedy(player, maze):
     严格遵循“视野受限”原则，只在有限视野内寻找性价比最高的资源。
     """
     history_set = set(player.path_history)
-    view_radius = 1  # 定义AI的视野范围为3*3的区域
+    view_radius = 3  # 3x3 视野
     local_targets = []
 
     # 1. 扫描视野内的所有地块
@@ -50,7 +45,7 @@ def decide_move_greedy(player, maze):
                 tile_type = maze.grid[ty][tx].type
                 
                 # 2. 只关注有价值的资源
-                if tile_type in {GOLD, HEALTH_POTION, LOCKER, BOSS, SHOP}:
+                if tile_type in {GOLD, LOCKER, BOSS}:
                     value = get_tile_value(tile_type, player)
                     if value > 0:
                         # 3. 计算到视野内资源的实际距离

@@ -22,39 +22,14 @@ COLOR_BATTLE_LOG_BG = (30, 40, 50, 220) # 日志背景
 
 # Game States & Algorithm Types
 STATE_MAIN_MENU, STATE_INSTRUCTIONS, STATE_CHOOSE_MAZE_SOURCE, STATE_SELECT_MODE, STATE_GAMEPLAY, STATE_BATTLE, STATE_PUZZLE, STATE_QUIT = range(8)
-ALGO_GREEDY, ALGO_DP_VISUALIZATION, ALGO_RANDOM = 'Greedy (Strategic)', 'DP (Optimal Path)', 'Random Walk'
+ALGO_GREEDY, ALGO_DP_VISUALIZATION = 'Greedy (Strategic)', 'DP (Optimal Path)'
 
 # Maze Element Constants
-WALL, PATH, START, END, BOSS, LOCKER, GOLD, TRAP, HEALTH_POTION, SHOP = range(10)
+WALL, PATH, START, END, BOSS, LOCKER, GOLD, TRAP, HEALTH_POTION = range(9)
 TILE_TYPE_COLORS = {
     WALL: COLOR_WALL, PATH: COLOR_PATH, START: (19, 201, 242), END: (221, 46, 68),
     BOSS: COLOR_PATH, LOCKER: COLOR_PATH, GOLD: COLOR_PATH, TRAP: COLOR_PATH,
-    HEALTH_POTION: COLOR_PATH, SHOP: COLOR_PATH,
 }
-
-# 游戏机制量化
-TRAP_GOLD_COST, TRAP_HEALTH_COST = 15, 20
-GOLD_REWARD, POTION_HEAL_AMOUNT = 10, 20
-PUZZLE_REWARD_DIAMONDS = 1
-
-# 通关评分量化
-SCORE_BOSS_KILL, SCORE_LOCKER_UNLOCK = 100, 100
-SCORE_PER_GOLD, SCORE_PER_DIAMOND, SCORE_PER_HEALTH = 1, 50, 2
-TIME_PENALTY_PER_5_SECONDS = 1
-
-# 玩家与Boss属性
-PLAYER_BASE_ATTACK = 5
-BOSS_MAX_HEALTH, BOSS_ATTACK = 100, 10
-
-# 技能系统定义 
-SKILLS = {
-    'power_strike': {'name': 'Power!', 'cost': 1, 'effect': {'damage_multiplier': 2.0}},
-    'frost_nova': {'name': 'Frozen!', 'cost': 1, 'effect': {'freeze_turns': 1}}
-}
-
-ATTACK_BOOST_AMOUNT = 5      # 每次提升所增加的攻击力
-GOLD_COST_FOR_BOOST = 15     # 提升攻击力所需消耗的金币
-HEALTH_COST_FOR_BOOST = 10   # 提升攻击力所需消耗的生命值
 
 # 用于保存生成迷宫的配置
 TEST_MAZE_DIR = "test_mazes" # 存放测试迷宫的文件夹名称

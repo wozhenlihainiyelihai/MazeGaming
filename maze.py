@@ -2,45 +2,47 @@ import os
 import pygame
 import random
 from collections import deque
-from config import *  # 包含颜色配置、地图大小、常量定义等
-from entities import Tile  # Tile 是地图上的单元格类
-from utils import create_all_icons  # 用于生成图标资源
+from config import *  # 配置文件：颜色、迷宫区域大小、常量等
+from entities import Tile  # Tile类代表迷宫中的单元格
+from utils import create_all_icons  # 加载图标资源
 import json
 
 class Maze:
-    """迷宫生成与管理类（支持随机生成或从文件加载）"""
+    """迷宫生成与管理类（支持从文件加载或随机生成）"""
 
     def __init__(self, size=None, source_data=None):
         if source_data:
-            # 从字符矩阵加载迷宫
+            # 如果传入字符矩阵，则从数据中加载迷宫
             self._load_from_data(source_data)
         elif size:
-            # 随机生成迷宫（必须为奇数）
+            # 如果传入尺寸，则生成一个新的随机迷宫（确保为奇数）
             self.size = size if size % 2 != 0 else size + 1
             self.grid = [[Tile(PATH) for _ in range(self.size)] for _ in range(self.size)]
-            self._generate_base_maze()  # 生成基础迷宫结构（递归分治法）
-            self._place_start_end_points()  # 放置起点和终点
-            main_path = self._find_main_path()  # 计算主路径（用于后续放Boss）
+            self._generate_base_maze()  # 生成基本通路结构（分治法）
+            self._place_start_end_points()  # 设置起点与终点
+            main_path = self._find_main_path()  # 计算主路径（起点到终点的路径）
+
             if main_path:
-                large_treasure_rooms = self._create_gated_treasure_rooms()  # 利用死胡同构造宝藏房间
-                self._place_boss(main_path, large_treasure_rooms)  # 放置 Boss
-                self._place_traps_on_main_path(main_path)  # 在主路径设置陷阱
+                large_treasure_rooms = self._create_gated_treasure_rooms()  # 使用死胡同生成宝藏房间
+                self._place_boss(main_path, large_treasure_rooms)  # 放置 Boss（可能放在主路径或宝藏房间）
+                self._place_traps_on_main_path(main_path)  # 主路径上放置陷阱
+                self._place_additional_resources(main_path)  # 放置额外金币资源
         else:
             raise ValueError("Maze 构造函数需要 'size' 或 'source_data' 参数。")
 
-        # 通用参数初始化
+        # 初始化每个单元格的像素尺寸
         self.cell_width = MAZE_AREA_SIZE // self.size
         self.cell_height = MAZE_AREA_SIZE // self.size
 
-        # 保存迷宫初始状态（用于 reset）
+        # 保存初始迷宫状态，用于重置
         self.pristine_grid = [[Tile(tile.type) for tile in row] for row in self.grid]
         self._load_icons()  # 加载图标资源
 
     def _load_from_data(self, maze_data):
-        """从字符数组加载迷宫结构"""
+        """从字符数组加载迷宫结构（#墙、空格、S起点、E终点、G金币等）"""
         CHAR_TO_TILE = {
             '#': WALL, ' ': PATH, 'S': START, 'E': END, 'B': BOSS,
-            'L': LOCKER, 'G': GOLD, 'T': TRAP, 'P': SHOP, 'H': HEALTH_POTION
+            'L': LOCKER, 'G': GOLD, 'T': TRAP
         }
         self.size = len(maze_data)
         self.grid = [[Tile(PATH) for _ in range(self.size)] for _ in range(self.size)]
@@ -59,6 +61,7 @@ class Maze:
                     self.end_pos = (c, r)
                     found_end = True
 
+        # 若缺少起点或终点，则设为默认位置
         if not found_start:
             self.start_pos = (1, 1)
             self.grid[1][1].type = START
@@ -69,18 +72,18 @@ class Maze:
             print("警告: 未找到终点 'E'，使用默认位置")
 
     def reset(self):
-        """将迷宫重置为初始状态"""
+        """将迷宫恢复为初始状态"""
         self.grid = [[Tile(tile.type) for tile in row] for row in self.pristine_grid]
 
     def _load_icons(self):
-        """加载图标资源并缩放到适当尺寸"""
+        """加载图标资源，并缩放为合适大小"""
         self.tile_icons = {}
         icon_size = int(min(self.cell_width, self.cell_height) * 0.7)
         if icon_size <= 0: return
         self.tile_icons = create_all_icons(icon_size)
 
     def _generate_base_maze(self):
-        """使用递归分治法生成基础迷宫结构"""
+        """使用递归分治法构建基础迷宫结构（四周为墙）"""
         for i in range(self.size):
             self.grid[0][i].type = WALL
             self.grid[self.size - 1][i].type = WALL
@@ -89,7 +92,7 @@ class Maze:
         self._divide(1, 1, self.size - 2, self.size - 2)
 
     def _divide(self, x, y, width, height):
-        """递归构建墙体"""
+        """递归地划分区域并添加墙壁"""
         if width < 2 or height < 2: return
         horizontal = width < height or (width == height and random.choice([True, False]))
         if horizontal:
@@ -97,7 +100,7 @@ class Maze:
             passage_x = x + (random.randrange((width + 1) // 2) * 2)
             for i in range(x, x + width + 1):
                 self.grid[wall_y][i].type = WALL
-            self.grid[wall_y][passage_x].type = PATH
+            self.grid[wall_y][passage_x].type = PATH  # 保留一个通道
             self._divide(x, y, width, wall_y - y)
             self._divide(x, wall_y + 1, width, y + height - wall_y - 1)
         else:
@@ -110,14 +113,14 @@ class Maze:
             self._divide(wall_x + 1, y, x + width - wall_x - 1, height)
 
     def _place_start_end_points(self):
-        """起点放在左上角，终点放在右下角"""
+        """设置起点终点坐标并标记在网格上"""
         self.start_pos = (1, 1)
         self.end_pos = (self.size - 2, self.size - 2)
         self.grid[self.start_pos[1]][self.start_pos[0]].type = START
         self.grid[self.end_pos[1]][self.end_pos[0]].type = END
 
     def _find_main_path(self):
-        """BFS 找起点到终点的路径"""
+        """使用 BFS 寻找从起点到终点的路径"""
         queue = deque([(self.start_pos, [self.start_pos])])
         visited = {self.start_pos}
         while queue:
@@ -133,7 +136,7 @@ class Maze:
         return []
 
     def _find_dead_ends(self, maze_grid):
-        """找所有死胡同位置（只有1个邻居的PATH）"""
+        """找到所有死胡同（仅一个邻居的路径格）"""
         dead_ends = []
         directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
         for r in range(self.size):
@@ -149,36 +152,36 @@ class Maze:
         return dead_ends
 
     def _create_gated_treasure_rooms(self):
-        """根据死胡同生成有宝藏和门的房间"""
+        """将死胡同变成宝藏房间（带门和金币）"""
         dead_ends = self._find_dead_ends(self.grid)
         potential = [p for p in dead_ends if p != self.start_pos and p != self.end_pos]
-        random.shuffle(potential) #打乱顺序，随机
+        random.shuffle(potential)
 
-        # 控制数量（可微调）
+        # 根据迷宫大小设置宝藏房间数量
         if self.size <= 7:
-            count = random.randint(1, 2)
+            count = random.randint(2, 3)
         elif self.size <= 15:
-            count = random.randint(2, 4)
+            count = random.randint(4, 6)
         else:
-            count = random.randint(4, 7)
+            count = random.randint(8, 12)
 
         rooms = []
         for i in range(min(count, len(potential))):
             lx, ly = potential[i]
-            self.grid[ly][lx].type = LOCKER
+            self.grid[ly][lx].type = LOCKER  # 放置上锁门
             for dr, dc in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
                 nr, nc = ly + dr, lx + dc
                 if 0 <= nr < self.size and 0 <= nc < self.size and self.grid[nr][nc].type == PATH:
-                    self.grid[nr][nc].type = GOLD if random.random() < 0.6 else HEALTH_POTION
+                    self.grid[nr][nc].type = GOLD
                     rooms.append([(lx, ly), (nc, nr)])
                     break
         return rooms
 
     def _place_boss(self, main_path, large_rooms):
-        """将Boss放在宝藏房间或主路径上"""
+        """放置 Boss（优先宝藏房间，其次主路径）"""
         boss_placed = False
         if large_rooms and random.random() < 0.6:
-            pos = large_rooms[random.randint(0, len(large_rooms)-1)][1]
+            pos = random.choice(large_rooms)[1]
             if self.grid[pos[1]][pos[0]].type not in [START, END]:
                 self.grid[pos[1]][pos[0]].type = BOSS
                 boss_placed = True
@@ -193,6 +196,7 @@ class Maze:
                 boss_placed = True
 
         if not boss_placed:
+            # 最后保底策略：强制放置
             for r in range(1, self.size - 1):
                 for c in range(1, self.size - 1):
                     if self.grid[r][c].type == PATH:
@@ -201,14 +205,29 @@ class Maze:
             print("警告: Boss 无法放置")
 
     def _place_traps_on_main_path(self, main_path):
-        """主路径上放置陷阱（5%）"""
+        """在主路径上放置陷阱（15% 概率）"""
         path_cells = [p for p in main_path if self.grid[p[1]][p[0]].type == PATH]
-        num_traps = int(len(path_cells) * 0.05)
+        num_traps = int(len(path_cells) * 0.15)
         for x, y in random.sample(path_cells, min(num_traps, len(path_cells))):
             self.grid[y][x].type = TRAP
 
+    def _place_additional_resources(self, main_path):
+        """在迷宫中非主路径上放置金币资源"""
+        path_cells = [(c, r) for r in range(self.size) for c in range(self.size) if self.grid[r][c].type == PATH]
+        main_path_set = set(main_path)
+        eligible_cells = [cell for cell in path_cells if cell not in main_path_set]
+
+        # 根据迷宫规模控制资源密度
+        if self.size <= 15:
+            num_gold = int(len(eligible_cells) * 0.1)
+        else:
+            num_gold = int(len(eligible_cells) * 0.15)
+
+        for x, y in random.sample(eligible_cells, min(num_gold, len(eligible_cells))):
+            self.grid[y][x].type = GOLD
+
     def draw(self, screen, dp_path_to_show=None):
-        """绘制地图及路径"""
+        """绘制迷宫和可视化路径"""
         screen.fill(COLOR_BG)
         for r, row in enumerate(self.grid):
             for c, tile in enumerate(row):
@@ -219,7 +238,7 @@ class Maze:
                     icon_rect = icon.get_rect(center=pygame.Rect(rect).center)
                     screen.blit(icon, icon_rect)
 
-        # 路径可视化（如 DP 路径）
+        # 绘制路径线条
         if dp_path_to_show:
             for i in range(len(dp_path_to_show) - 1):
                 p1 = dp_path_to_show[i]
@@ -230,54 +249,38 @@ class Maze:
                        p2[1] * self.cell_height + self.cell_height // 2)
                 pygame.draw.line(screen, COLOR_DP_PATH, start, end, 4)
 
-        # 绘制网格线
+        # 画网格线（增强视觉辅助）
         for i in range(self.size + 1):
             pygame.draw.line(screen, COLOR_GRID, (i * self.cell_width, 0), (i * self.cell_width, MAZE_AREA_SIZE))
             pygame.draw.line(screen, COLOR_GRID, (0, i * self.cell_height), (MAZE_AREA_SIZE, i * self.cell_height))
 
-    def save_to_json(self, filename=None): # filename 参数改为可选，默认 None
-        """
-        将当前迷宫的布局保存到 JSON 文件中，只包含迷宫字符矩阵。
-        默认保存到 config.py 中定义的固定测试迷宫路径。
-        """
-        # 定义 Tile 类型到字符的映射
+    def save_to_json(self, filename=None):
+        """将当前迷宫保存为 JSON 格式（只保存字符矩阵）"""
         TILE_TO_CHAR = {
             WALL: '#', PATH: ' ', START: 'S', END: 'E', BOSS: 'B',
-            LOCKER: 'L', GOLD: 'G', TRAP: 'T', HEALTH_POTION: 'H', SHOP: 'P'
+            LOCKER: 'L', GOLD: 'G', TRAP: 'T'
         }
 
         maze_chars = []
-        for r, row_of_tiles in enumerate(self.grid):
-            row_chars = []
-            for c, tile in enumerate(row_of_tiles):
-                # 确保每个瓦片类型都有对应的字符，否则默认为空格
-                row_chars.append(TILE_TO_CHAR.get(tile.type, ' ')) 
+        for row_of_tiles in self.grid:
+            row_chars = [TILE_TO_CHAR.get(tile.type, ' ') for tile in row_of_tiles]
             maze_chars.append(row_chars)
             
-        data = {
-            "maze": maze_chars
-        }
+        data = {"maze": maze_chars}
 
-        # 构建完整的文件路径
-        # 如果 filename 参数未提供，则使用 config.py 中定义的固定路径
         if filename is None:
             output_dir = TEST_MAZE_DIR
             output_filename = TEST_MAZE_FILENAME
             full_path = os.path.join(output_dir, output_filename)
         else:
-            # 如果提供了 filename，则使用它
-            output_dir = os.path.dirname(filename)
-            if not output_dir: # 如果 filename 没有路径信息，则默认为当前目录
-                output_dir = "."
+            output_dir = os.path.dirname(filename) or "."
             full_path = filename
 
-        # 确保目录存在
         os.makedirs(output_dir, exist_ok=True)
 
         try:
             with open(full_path, 'w') as f:
-                json.dump(data, f, indent=4) # 使用 indent=4 使 JSON 文件更易读
+                json.dump(data, f, indent=4)
             print(f"迷宫已成功保存到 {full_path}")
         except IOError as e:
             print(f"保存迷宫失败: {e}")
-
