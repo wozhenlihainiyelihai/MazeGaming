@@ -17,7 +17,7 @@ def get_tile_value(tile_type, player):
     if tile_type == LOCKER:
         return SCORE_LOCKER_UNLOCK
     if tile_type == TRAP:
-        return -50 if player.gold < TRAP_GOLD_COST else -10
+        return -30
     if tile_type == SHOP:
         return 40
     if tile_type == BOSS:
@@ -35,7 +35,7 @@ def decide_move_greedy(player, maze):
     严格遵循“视野受限”原则，只在有限视野内寻找性价比最高的资源。
     """
     history_set = set(player.path_history)
-    view_radius = 5  # 定义AI的视野范围为5x5的区域
+    view_radius = 1  # 定义AI的视野范围为3*3的区域
     local_targets = []
 
     # 1. 扫描视野内的所有地块

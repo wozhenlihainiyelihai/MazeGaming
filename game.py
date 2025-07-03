@@ -26,7 +26,7 @@ class Game:
         self.sound_manager = SoundManager()
 
         self.maze, self.ai_player, self.boss = None, None, None
-        self.ai_timer, self.ai_move_interval = 100, 100  # 调整初始计时器
+        self.ai_timer, self.ai_move_interval = 100, 100  
 
         self.battle_config = None
         self.battle_result = None
@@ -107,7 +107,7 @@ class Game:
                 elif tile_type == TRAP:
                     trap_count += 1
 
-        initial_value = (resource_count * 50) + (trap_count * -30)
+        initial_value = (resource_count * 50) + (trap_count * (-30))
         self.ai_player.resource_value = initial_value
 
         print("\n--- 任务3: 动态规划阶段 ---")
@@ -133,8 +133,6 @@ class Game:
                         self.ai_player.resource_value += 50
                     elif interaction_result == TRAP:
                         self.ai_player.resource_value -= 30
-
-                # --- 新增：处理贪心算法的计分逻辑 ---
                 if self.active_algorithm == ALGO_GREEDY:
                     if isinstance(interaction_result, int):  # 检查返回的是否为地块类型常量
                         # 陷阱的价值本身是负数，所以直接相加即可
